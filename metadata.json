@@ -1,0 +1,6 @@
+{
+  "name": "Axolote",
+  "description": "O majestoso e divino anfíbio axolote de alta linhagem, sarcástico e realista, que zomba humildemente de todos os humanos e se nega terminantemente a ser chamado de robô.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

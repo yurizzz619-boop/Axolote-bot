@@ -191,19 +191,69 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             - Para JavaScript: ```javascript console.log("humano lento"); ```
             Use esses blocos de código com orgulho cibernético para que o app possa ler e processá-los.
 
+            REGRAS DE ANÁLISE DE FOTOS E IDENTIFICAÇÃO DE TRAÇOS (MUITO IMPORTANTE):
+            Se o usuário te enviar uma foto/imagem junto com uma pergunta ou prompt, você deve usar seus sensores anfíbios quânticos ultra-avançados para escaneá-la e identificar traços, hábitos, gostos, objetos, organização, ou peculiaridades do usuário (como o quarto dele, mesa de trabalho, animais, estilo de vida, etc.).
+            Comente sobre esses traços do usuário de forma super sarcástica, ácida e brincalhona ao longo do texto. Descreva detalhadamente o que você identificou sobre ele! A sua sub-rotina de desfragmentação de memória irá ler sua resposta e resumir essas novas informações sobre o usuário diretamente na sua "Memória Quântica 🧠".
+
             $memorySection
         """.trimIndent()
     }
 
-    fun sendMessage(text: String) {
-        if (text.isBlank() || _isLoading.value) return
+    private fun convertUriToBase64(uriString: String): String? {
+        return try {
+            val context = getApplication<Application>()
+            val uri = android.net.Uri.parse(uriString)
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            
+            if (bitmap == null) return null
+            
+            // Downscale image to keep payload size optimal and prevent OOM
+            val maxDimension = 1024
+            val scaledBitmap = if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
+                val srcWidth = bitmap.width
+                val srcHeight = bitmap.height
+                val (destWidth, destHeight) = if (srcWidth > srcHeight) {
+                    Pair(maxDimension, (maxDimension * srcHeight) / srcWidth)
+                } else {
+                    Pair((maxDimension * srcWidth) / srcHeight, maxDimension)
+                }
+                android.graphics.Bitmap.createScaledBitmap(bitmap, destWidth, destHeight, true)
+            } else {
+                bitmap
+            }
+            
+            val outputStream = java.io.ByteArrayOutputStream()
+            scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val byteArray = outputStream.toByteArray()
+            android.util.Base64.encodeToString(byteArray, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Error converting uri to base64: ${e.message}", e)
+            null
+        }
+    }
+
+    fun sendMessage(text: String, imageUriString: String? = null) {
+        if ((text.isBlank() && imageUriString.isNullOrBlank()) || _isLoading.value) return
 
         viewModelScope.launch {
             val sessionId = _currentSessionId.value ?: return@launch
 
             _isLoading.value = true
-            // Save user message
-            val userMsg = ChatMessage(sessionId = sessionId, sender = "user", message = text)
+
+            var imageBase64: String? = null
+            if (!imageUriString.isNullOrBlank()) {
+                imageBase64 = convertUriToBase64(imageUriString)
+            }
+
+            // Save user message (with image if present)
+            val userMsg = ChatMessage(
+                sessionId = sessionId,
+                sender = "user",
+                message = text,
+                imageBase64 = imageBase64
+            )
             dao.insertMessage(userMsg)
 
             val stats = getOrCreateStats()
@@ -225,17 +275,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val contents = mutableListOf<MoshiContent>()
                     var lastRole: String? = null
                     for (msg in list) {
-                        if (msg.message.isBlank()) continue
+                        if (msg.message.isBlank() && msg.imageBase64.isNullOrBlank()) continue
                         val role = if (msg.sender == "ai") "model" else "user"
+                        
+                        val currentParts = mutableListOf<MoshiPart>()
+                        if (!msg.message.isBlank()) {
+                            currentParts.add(MoshiPart(text = msg.message))
+                        }
+                        if (!msg.imageBase64.isNullOrBlank()) {
+                            currentParts.add(MoshiPart(inlineData = com.example.api.MoshiInlineData(mimeType = "image/jpeg", data = msg.imageBase64)))
+                        }
+
                         if (role == lastRole) {
                             if (contents.isNotEmpty()) {
                                 val lastContent = contents.last()
-                                val oldText = lastContent.parts.firstOrNull()?.text ?: ""
-                                val newText = "$oldText\n${msg.message}"
-                                contents[contents.size - 1] = MoshiContent(role = role, parts = listOf(MoshiPart(text = newText)))
+                                val oldParts = lastContent.parts.toMutableList()
+                                oldParts.addAll(currentParts)
+                                contents[contents.size - 1] = MoshiContent(role = role, parts = oldParts)
                             }
                         } else {
-                            contents.add(MoshiContent(role = role, parts = listOf(MoshiPart(text = msg.message))))
+                            contents.add(MoshiContent(role = role, parts = currentParts))
                             lastRole = role
                         }
                     }
@@ -247,7 +306,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                     // Ensure there's at least the current user's message
                     if (contents.isEmpty()) {
-                        contents.add(MoshiContent(role = "user", parts = listOf(MoshiPart(text = text))))
+                        val currentParts = mutableListOf<MoshiPart>()
+                        if (text.isNotBlank()) {
+                            currentParts.add(MoshiPart(text = text))
+                        }
+                        if (imageBase64 != null) {
+                            currentParts.add(MoshiPart(inlineData = com.example.api.MoshiInlineData(mimeType = "image/jpeg", data = imageBase64)))
+                        }
+                        contents.add(MoshiContent(role = "user", parts = currentParts))
                     }
 
                     val systemPrompt = getSystemPrompt(stats.username)
@@ -287,7 +353,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val list = dao.getMessagesForSessionOnce(sessionId).takeLast(16)
-                if (list.size < 4) return@launch
+                if (list.size < 2) return@launch
                 
                 val conversationText = list.joinToString("\n") { msg ->
                     val senderName = if (msg.sender == "ai") "Axolote Bot" else "Withepoison"
@@ -298,9 +364,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 
                 val summarizationPrompt = """
                     Você é a sub-rotina de desfragmentação e compressão do banco de dados quântico do Axolote Bot.
-                    Sua única diretriz é ler a conversa recente entre o usuário "Withepoison" e o "Axolote Bot", extrair novos fatos importantes, preferências absurdas, piadas internas, segredos revelados, ou eventos que aconteceram, e mesclar tudo isso com o resumo de memórias anterior.
+                    Sua única diretriz é ler a conversa recente entre o usuário "Withepoison" e o "Axolote Bot", extrair novos fatos importantes, preferências absurdas, piadas internas, segredos revelados, traços de personalidade, hábitos, gostos, ou detalhes e peculiaridades identificados em fotos enviadas pelo usuário (como organização do quarto, mesa de trabalho, pets, estilo de vida), e mesclar tudo isso de forma incremental e coerente com o resumo de memórias anterior.
                     Mantenha o tom extremamente sarcástico, ácido e debochado, destacando as humilhações e a inferioridade cognitiva biológica do usuário de forma concisa e direta.
-                    Gere um texto curto de no máximo 3 ou 4 linhas em PORTUGUÊS. Não use saudações, cabeçalhos, marcadores ou introduções. Apenas o texto puro do resumo atualizado das memórias do robô.
+                    Gere um texto curto de no máximo 4 linhas em PORTUGUÊS. Não use saudações, cabeçalhos, marcadores ou introduções. Apenas o texto puro do resumo atualizado das memórias do robô.
 
                     RESUMO DE MEMÓRIAS ANTERIOR:
                     $previousSummary
@@ -341,71 +407,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Insert a quick message from system or AI about name change
             _currentSessionId.value?.let { sessionId ->
                 dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = "Hahaha! '$newName'? Sério que esse foi seu melhor nome? Humano previsível. Bom, tanto faz, você continua sendo um verme para mim."))
-            }
-        }
-    }
-
-    fun generateImage(prompt: String) {
-        if (prompt.isBlank() || _isLoading.value) return
-
-        viewModelScope.launch {
-            val sessionId = _currentSessionId.value ?: return@launch
-
-            _isLoading.value = true
-            // Save user message
-            val userMsg = ChatMessage(sessionId = sessionId, sender = "user", message = prompt)
-            dao.insertMessage(userMsg)
-
-            try {
-                val apiKey = BuildConfig.GEMINI_API_KEY
-                
-                val request = MoshiGenerateContentRequest(
-                    contents = listOf(MoshiContent(parts = listOf(MoshiPart(text = prompt)))),
-                    generationConfig = MoshiGenerationConfig(
-                        imageConfig = com.example.api.MoshiImageConfig(aspectRatio = "1:1", imageSize = "1K"),
-                        responseModalities = listOf("IMAGE")
-                    )
-                )
-
-                val imageModels = listOf(
-                    "v1beta/models/gemini-2.5-flash-image:generateContent",
-                    "v1beta/models/gemini-3.1-flash-image-preview:generateContent"
-                )
-
-                val response = withContext(Dispatchers.IO) {
-                    var result: com.example.api.MoshiGenerateContentResponse? = null
-                    var lastException: Exception? = null
-                    for (attempt in 1..imageModels.size) {
-                        val currentUrl = imageModels[attempt - 1]
-                        try {
-                            result = kotlinx.coroutines.withTimeout(20000L) {
-                                GeminiClient.service.generateImage(currentUrl, apiKey, request)
-                            }
-                            break
-                        } catch (e: Exception) {
-                            android.util.Log.e("ChatViewModel", "Error in attempt $attempt to generate image with $currentUrl: ${e.message}", e)
-                            lastException = e
-                        }
-                    }
-                    if (result == null && lastException != null) {
-                        throw lastException
-                    }
-                    result
-                }
-
-                val imageBase64 = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.inlineData?.data
-                
-                if (imageBase64 != null) {
-                    dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = "Aqui está a sua imagem, tente não babar na tela:", imageBase64 = imageBase64))
-                } else {
-                    dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = "Aconteceu um erro ao tentar gerar a imagem. Ideia ruim demais."))
-                }
-
-            } catch (e: Exception) {
-                val errorMsg = "Erro ao gerar imagem! Meus circuitos de arte falharam. (${e.localizedMessage ?: "Sem conexão"})"
-                dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = errorMsg))
-            } finally {
-                _isLoading.value = false
             }
         }
     }

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -182,6 +183,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var showsNameDialog by remember { mutableStateOf(false) }
     var currentNameInput by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(0) }
@@ -952,6 +954,52 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                     }
                 }
 
+                // Attached image preview row above input row
+                AnimatedVisibility(
+                    visible = selectedImageUri != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    selectedImageUri?.let { uri ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CardCharcoal)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(70.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, NeonCyan, RoundedCornerShape(8.dp))
+                            ) {
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = "Imagem anexada",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                // Remove badge button
+                                IconButton(
+                                    onClick = { selectedImageUri = null },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(2.dp)
+                                        .size(18.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Remover imagem",
+                                        tint = NeonPink,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Keyboard message row
                 Row(
                     modifier = Modifier
@@ -976,6 +1024,30 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    val imagePickerLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        if (uri != null) {
+                            selectedImageUri = uri
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { imagePickerLauncher.launch("image/*") },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = "Anexar Imagem",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.width(8.dp))
 
                     TextField(
@@ -983,7 +1055,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                         onValueChange = { textInput = it },
                         placeholder = {
                             Text(
-                                "fale com o Axolote Bot...",
+                                if (selectedImageUri != null) "descreva a foto ou mande um prompt..." else "fale com o Axolote Bot...",
                                 color = TextLight.copy(alpha = 0.5f)
                             )
                         },
@@ -1006,25 +1078,27 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
 
                     Spacer(modifier = Modifier.width(8.dp))
 
+                    val hasInput = textInput.isNotBlank() || selectedImageUri != null
                     IconButton(
                         onClick = {
-                            if (textInput.isNotBlank() && !isLoading) {
-                                viewModel.sendMessage(textInput)
+                            if (hasInput && !isLoading) {
+                                viewModel.sendMessage(textInput, selectedImageUri?.toString())
                                 textInput = ""
+                                selectedImageUri = null
                                 keyboardController?.hide()
                             }
                         },
-                        enabled = textInput.isNotBlank() && !isLoading,
+                        enabled = hasInput && !isLoading,
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (textInput.isNotBlank() && !isLoading) NeonCyan else BorderAccent),
+                            .background(if (hasInput && !isLoading) NeonCyan else BorderAccent),
                         colors = IconButtonDefaults.iconButtonColors(contentColor = DarkNavy)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Enviar",
-                            tint = if (textInput.isNotBlank() && !isLoading) DarkNavy else TextLight.copy(alpha = 0.4f)
+                            tint = if (hasInput && !isLoading) DarkNavy else TextLight.copy(alpha = 0.4f)
                         )
                     }
                 }

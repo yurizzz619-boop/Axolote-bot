@@ -2,7 +2,8 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -10,23 +11,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Baixar projeto
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Configurar Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v3
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Grant execute permission
-        run: chmod +x gradlew
+      - name: Ver arquivos
+        run: ls -la
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Compilar APK
+        run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Pegar APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: APK
           path: app/build/outputs/apk/debug/*.apk

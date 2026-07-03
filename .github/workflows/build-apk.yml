@@ -1,0 +1,56 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch: # Permite rodar manualmente pelo GitHub
+
+jobs:
+  build:
+    name: Compilar APK de Depuração (Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter Código Fonte (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Configurar Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Configurar Arquivo de Variáveis de Ambiente (.env)
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            echo "GEMINI_API_KEY=dummy_key" > .env
+          fi
+
+      - name: Descodificar debug.keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            echo "Decodificando debug.keystore do base64..."
+            base64 --decode debug.keystore.base64 > debug.keystore
+          else
+            echo "debug.keystore.base64 não encontrado. Gerando uma keystore temporária..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Dar Permissão de Execução ao Gradlew
+        run: chmod +x gradlew
+
+      - name: Compilar APK (assembleDebug)
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload do APK Gerado como Artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

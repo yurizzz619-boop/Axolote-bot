@@ -38,7 +38,7 @@ git push -u origin main
 2. Clique na aba **"Actions"** (na barra superior).
 3. Você verá o workflow chamado **"Build Android APK"** rodando automaticamente.
 4. Quando a compilação terminar (ficar com um ícone verde `check`), clique na execução do workflow.
-5. Role a página até a seção **Artifacts** (Artefatos) e clique em **`app-debug-apk`** para baixar o seu arquivo APK compactado!
+5. Role a página até a seção **Artifacts** (Artefatos) e clique em **`Axolote_Bot_APK`** para baixar o seu arquivo contendo o APK **`Axolote_Bot.apk`**!
 
 ---
 

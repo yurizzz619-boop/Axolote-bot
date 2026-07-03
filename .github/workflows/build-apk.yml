@@ -48,9 +48,14 @@ jobs:
       - name: Compilar APK (assembleDebug)
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Renomear o arquivo APK para Axolote_Bot.apk
+        run: |
+          mkdir -p build-artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk build-artifacts/Axolote_Bot.apk
+
       - name: Upload do APK Gerado como Artefato
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Axolote_Bot_APK
+          path: build-artifacts/Axolote_Bot.apk
           if-no-files-found: error

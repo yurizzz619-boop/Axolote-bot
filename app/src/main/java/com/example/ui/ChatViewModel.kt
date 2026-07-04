@@ -39,6 +39,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _botAvatarUri.value = uri
     }
 
+    private val _customApiKey = MutableStateFlow<String>(sharedPreferences.getString("custom_api_key", "") ?: "")
+    val customApiKey: StateFlow<String> = _customApiKey.asStateFlow()
+
+    fun updateCustomApiKey(key: String) {
+        sharedPreferences.edit().putString("custom_api_key", key.trim()).apply()
+        _customApiKey.value = key.trim()
+    }
+
     private val db = AppDatabase.getDatabase(application)
     private val dao = db.chatDao()
 
@@ -242,6 +250,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             _isLoading.value = true
 
+            val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
+            val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
+
+            if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+                val warningMsg = "ALERTA DO SISTEMA: Minha matriz quântica está sem energia! Para que eu possa te responder por texto, preciso de uma chave de API do Gemini válida.\n\nPor favor, toque no ícone de engrenagem no topo esquerdo, clique em 'Chave API do Gemini' e insira uma chave válida."
+                dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = warningMsg))
+                _isLoading.value = false
+                return@launch
+            }
+
             var imageBase64: String? = null
             if (!imageUriString.isNullOrBlank()) {
                 imageBase64 = convertUriToBase64(imageUriString)
@@ -261,9 +279,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             var replyText: String? = null
             var attempts = 0
             val models = listOf(
-                "v1beta/models/gemini-3.1-flash-lite-preview:generateContent",
-                "v1beta/models/gemini-3.5-flash:generateContent",
-                "v1beta/models/gemini-3.1-pro-preview:generateContent"
+                "v1beta/models/gemini-1.5-flash:generateContent",
+                "v1beta/models/gemini-2.5-flash:generateContent",
+                "v1beta/models/gemini-2.0-flash:generateContent",
+                "v1beta/models/gemini-1.5-pro:generateContent"
             )
 
             while (replyText == null && attempts < models.size) {
@@ -323,7 +342,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         systemInstruction = MoshiContent(parts = listOf(MoshiPart(text = systemPrompt)))
                     )
 
-                    val apiKey = BuildConfig.GEMINI_API_KEY
                     val response = withContext(Dispatchers.IO) {
                         kotlinx.coroutines.withTimeout(15000L) {
                             GeminiClient.service.generateContent(currentUrl, apiKey, request)
@@ -380,10 +398,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     generationConfig = MoshiGenerationConfig(temperature = 1.0f)
                 )
 
-                val apiKey = BuildConfig.GEMINI_API_KEY
+                val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
+                val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
+                if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") return@launch
+
                 val response = withContext(Dispatchers.IO) {
                     kotlinx.coroutines.withTimeout(15000L) {
-                        GeminiClient.service.generateContent("v1beta/models/gemini-3.5-flash:generateContent", apiKey, request)
+                        GeminiClient.service.generateContent("v1beta/models/gemini-1.5-flash:generateContent", apiKey, request)
                     }
                 }
                 
@@ -513,29 +534,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             val models = listOf(
-                "v1beta/models/gemini-3.1-flash-lite-preview:generateContent",
-                "v1beta/models/gemini-3.5-flash:generateContent"
+                "v1beta/models/gemini-1.5-flash:generateContent",
+                "v1beta/models/gemini-2.5-flash:generateContent"
             )
 
-            for (modelUrl in models) {
-                try {
-                    val apiKey = BuildConfig.GEMINI_API_KEY
-                    val response = withContext(Dispatchers.IO) {
-                        try {
-                            kotlinx.coroutines.withTimeout(10000L) {
-                                GeminiClient.service.generateContent(modelUrl, apiKey, request)
+            val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
+            val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
+
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                for (modelUrl in models) {
+                    try {
+                        val response = withContext(Dispatchers.IO) {
+                            try {
+                                kotlinx.coroutines.withTimeout(10000L) {
+                                    GeminiClient.service.generateContent(modelUrl, apiKey, request)
+                                }
+                            } catch (e: Exception) {
+                                null
                             }
-                        } catch (e: Exception) {
-                            null
                         }
+                        val generated = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (!generated.isNullOrBlank()) {
+                            replyText = generated
+                            break
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatViewModel", "Error in random prompt generation: ${e.message}")
                     }
-                    val generated = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                    if (!generated.isNullOrBlank()) {
-                        replyText = generated
-                        break
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("ChatViewModel", "Error in random prompt generation: ${e.message}")
                 }
             }
         }

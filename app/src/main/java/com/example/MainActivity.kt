@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -89,21 +91,10 @@ val TextLight = Color(0xFFFFF3E0) // Light orange text
 val BorderAccent = Color(0xFF7A3700)
 
 class MainActivity : ComponentActivity() {
-    private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        try {
-            tts = TextToSpeech(this) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts?.language = java.util.Locale("pt", "BR")
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to init TextToSpeech", e)
-        }
-
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -111,18 +102,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = DarkNavy
                 ) {
-                    ChatScreen(tts = tts)
+                    ChatScreen()
                 }
             }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            tts?.shutdown()
-        } catch (e: Exception) {
-            // ignore
         }
     }
 }
@@ -131,12 +113,14 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null) {
+fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val stats by viewModel.userStats.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val chatSessions by viewModel.chatSessions.collectAsStateWithLifecycle()
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
+
+    val customApiKey by viewModel.customApiKey.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -146,6 +130,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
     var imagePromptInput by remember { mutableStateOf("") }
 
     var showsAvatarPickerDialog by remember { mutableStateOf(false) }
+
+    var showsApiKeyDialog by remember { mutableStateOf(false) }
+    var currentApiKeyInput by remember { mutableStateOf("") }
 
     val botAvatarUri by viewModel.botAvatarUri.collectAsStateWithLifecycle()
     val botAvatarSource = remember(botAvatarUri) {
@@ -484,6 +471,43 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                             Text("Apagar histórico de mensagens atual", color = TextLight.copy(alpha = 0.5f), fontSize = 11.sp)
                         }
                     }
+
+                    // Setting 4: Chave API do Gemini
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                currentApiKeyInput = customApiKey
+                                showsApiKeyDialog = true
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                            .padding(vertical = 10.dp, horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(DarkNavy, CircleShape)
+                                .border(1.dp, NeonGreen.copy(alpha = 0.5f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = NeonGreen,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Chave API do Gemini", color = TextLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (customApiKey.isNotBlank()) "Status: Configurada (Toque para alterar)" else "Status: Não configurada (Obrigatória para APK)",
+                                color = if (customApiKey.isNotBlank()) NeonGreen else NeonPink,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
                 }
 
                 HorizontalDivider(color = BorderAccent.copy(alpha = 0.6f))
@@ -746,6 +770,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                                             fontSize = 15.sp,
                                             lineHeight = 20.sp
                                         )
+
+
 
 
                                     }
@@ -1087,6 +1113,136 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
         AvatarPickerDialog(
             onDismiss = { showsAvatarPickerDialog = false },
             onAvatarSelected = { viewModel.updateBotAvatar(it) }
+        )
+    }
+
+    if (showsApiKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showsApiKeyDialog = false },
+            containerColor = CardCharcoal,
+            title = {
+                Text(
+                    text = "Configurar Chave API do Gemini",
+                    color = NeonCyan,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Insira sua chave de API para o Axolote Bot responder por texto no aplicativo instalado no celular.",
+                        fontSize = 13.sp,
+                        color = TextLight.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Você pode obter uma chave gratuita acessando:\naistudio.google.com",
+                        fontSize = 11.sp,
+                        color = NeonGreen,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = currentApiKeyInput,
+                        onValueChange = { currentApiKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Cole sua chave API do Gemini aqui...", color = TextLight.copy(alpha = 0.4f), fontSize = 12.sp) },
+                        textStyle = LocalTextStyle.current.copy(color = TextLight, fontSize = 13.sp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextLight,
+                            unfocusedTextColor = TextLight,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = BorderAccent
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateCustomApiKey(currentApiKeyInput)
+                        showsApiKeyDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkNavy)
+                ) {
+                    Text("Salvar Chave", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showsApiKeyDialog = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = TextLight.copy(alpha = 0.6f))
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showsApiKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showsApiKeyDialog = false },
+            containerColor = CardCharcoal,
+            title = {
+                Text(
+                    text = "Configurar Chave API do Gemini",
+                    color = NeonCyan,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Insira sua chave de API para o Axolote Bot responder por texto no aplicativo instalado no celular.",
+                        fontSize = 13.sp,
+                        color = TextLight.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Você pode obter uma chave gratuita acessando:\naistudio.google.com",
+                        fontSize = 11.sp,
+                        color = NeonGreen,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = currentApiKeyInput,
+                        onValueChange = { currentApiKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Cole sua chave API do Gemini aqui...", color = TextLight.copy(alpha = 0.4f), fontSize = 12.sp) },
+                        textStyle = LocalTextStyle.current.copy(color = TextLight, fontSize = 13.sp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextLight,
+                            unfocusedTextColor = TextLight,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = BorderAccent
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateCustomApiKey(currentApiKeyInput)
+                        showsApiKeyDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkNavy)
+                ) {
+                    Text("Salvar Chave", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showsApiKeyDialog = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = TextLight.copy(alpha = 0.6f))
+                ) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 

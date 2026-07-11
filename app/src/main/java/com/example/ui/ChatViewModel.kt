@@ -43,14 +43,148 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _botAvatarUri = MutableStateFlow<String?>(sharedPreferences.getString("bot_avatar_uri", null))
     val botAvatarUri: StateFlow<String?> = _botAvatarUri.asStateFlow()
 
+    private val _customAppIconUri = MutableStateFlow<String?>(sharedPreferences.getString("custom_app_icon_uri", null))
+    val customAppIconUri: StateFlow<String?> = _customAppIconUri.asStateFlow()
+
+    private val _activeLauncherAlias = MutableStateFlow<String>(sharedPreferences.getString("active_launcher_alias", "com.example.MainActivityAliasDefault") ?: "com.example.MainActivityAliasDefault")
+    val activeLauncherAlias: StateFlow<String> = _activeLauncherAlias.asStateFlow()
+
     private val _activeCanvasArtifact = MutableStateFlow<CodeArtifact?>(null)
     val activeCanvasArtifact: StateFlow<CodeArtifact?> = _activeCanvasArtifact.asStateFlow()
 
     private val _isCanvasModeEnabled = MutableStateFlow(false)
     val isCanvasModeEnabled: StateFlow<Boolean> = _isCanvasModeEnabled.asStateFlow()
 
+    private val _isMusicModeEnabled = MutableStateFlow(false)
+    val isMusicModeEnabled: StateFlow<Boolean> = _isMusicModeEnabled.asStateFlow()
+
+    private val _isTranslatorModeEnabled = MutableStateFlow(false)
+    val isTranslatorModeEnabled: StateFlow<Boolean> = _isTranslatorModeEnabled.asStateFlow()
+
+    private val _isSummarizerModeEnabled = MutableStateFlow(false)
+    val isSummarizerModeEnabled: StateFlow<Boolean> = _isSummarizerModeEnabled.asStateFlow()
+
+    private val _isCodeFixerModeEnabled = MutableStateFlow(false)
+    val isCodeFixerModeEnabled: StateFlow<Boolean> = _isCodeFixerModeEnabled.asStateFlow()
+
+    private val _isDiagramModeEnabled = MutableStateFlow(false)
+    val isDiagramModeEnabled: StateFlow<Boolean> = _isDiagramModeEnabled.asStateFlow()
+
+    private val _isInterviewModeEnabled = MutableStateFlow(false)
+    val isInterviewModeEnabled: StateFlow<Boolean> = _isInterviewModeEnabled.asStateFlow()
+
+    private val _isWriterModeEnabled = MutableStateFlow(false)
+    val isWriterModeEnabled: StateFlow<Boolean> = _isWriterModeEnabled.asStateFlow()
+
+    private val _isMathModeEnabled = MutableStateFlow(false)
+    val isMathModeEnabled: StateFlow<Boolean> = _isMathModeEnabled.asStateFlow()
+
+    private val _isPlannerModeEnabled = MutableStateFlow(false)
+    val isPlannerModeEnabled: StateFlow<Boolean> = _isPlannerModeEnabled.asStateFlow()
+
+    private val _isPromptModeEnabled = MutableStateFlow(false)
+    val isPromptModeEnabled: StateFlow<Boolean> = _isPromptModeEnabled.asStateFlow()
+
+    private val _isRpgModeEnabled = MutableStateFlow(false)
+    val isRpgModeEnabled: StateFlow<Boolean> = _isRpgModeEnabled.asStateFlow()
+
+    private fun disableAllSpecialModesExcept(exceptMode: String?) {
+        if (exceptMode != "canvas") _isCanvasModeEnabled.value = false
+        if (exceptMode != "music") _isMusicModeEnabled.value = false
+        if (exceptMode != "translator") _isTranslatorModeEnabled.value = false
+        if (exceptMode != "summarizer") _isSummarizerModeEnabled.value = false
+        if (exceptMode != "code_fixer") _isCodeFixerModeEnabled.value = false
+        if (exceptMode != "diagram") _isDiagramModeEnabled.value = false
+        if (exceptMode != "interview") _isInterviewModeEnabled.value = false
+        if (exceptMode != "writer") _isWriterModeEnabled.value = false
+        if (exceptMode != "math") _isMathModeEnabled.value = false
+        if (exceptMode != "planner") _isPlannerModeEnabled.value = false
+        if (exceptMode != "prompt") _isPromptModeEnabled.value = false
+        if (exceptMode != "rpg") _isRpgModeEnabled.value = false
+    }
+
     fun toggleCanvasMode() {
         _isCanvasModeEnabled.value = !_isCanvasModeEnabled.value
+        if (_isCanvasModeEnabled.value) {
+            disableAllSpecialModesExcept("canvas")
+        }
+    }
+
+    fun toggleMusicMode() {
+        _isMusicModeEnabled.value = !_isMusicModeEnabled.value
+        if (_isMusicModeEnabled.value) {
+            disableAllSpecialModesExcept("music")
+        }
+    }
+
+    fun toggleTranslatorMode() {
+        _isTranslatorModeEnabled.value = !_isTranslatorModeEnabled.value
+        if (_isTranslatorModeEnabled.value) {
+            disableAllSpecialModesExcept("translator")
+        }
+    }
+
+    fun toggleSummarizerMode() {
+        _isSummarizerModeEnabled.value = !_isSummarizerModeEnabled.value
+        if (_isSummarizerModeEnabled.value) {
+            disableAllSpecialModesExcept("summarizer")
+        }
+    }
+
+    fun toggleWriterMode() {
+        _isWriterModeEnabled.value = !_isWriterModeEnabled.value
+        if (_isWriterModeEnabled.value) {
+            disableAllSpecialModesExcept("writer")
+        }
+    }
+
+    fun toggleMathMode() {
+        _isMathModeEnabled.value = !_isMathModeEnabled.value
+        if (_isMathModeEnabled.value) {
+            disableAllSpecialModesExcept("math")
+        }
+    }
+
+    fun togglePlannerMode() {
+        _isPlannerModeEnabled.value = !_isPlannerModeEnabled.value
+        if (_isPlannerModeEnabled.value) {
+            disableAllSpecialModesExcept("planner")
+        }
+    }
+
+    fun togglePromptMode() {
+        _isPromptModeEnabled.value = !_isPromptModeEnabled.value
+        if (_isPromptModeEnabled.value) {
+            disableAllSpecialModesExcept("prompt")
+        }
+    }
+
+    fun toggleRpgMode() {
+        _isRpgModeEnabled.value = !_isRpgModeEnabled.value
+        if (_isRpgModeEnabled.value) {
+            disableAllSpecialModesExcept("rpg")
+        }
+    }
+
+    fun toggleCodeFixerMode() {
+        _isCodeFixerModeEnabled.value = !_isCodeFixerModeEnabled.value
+        if (_isCodeFixerModeEnabled.value) {
+            disableAllSpecialModesExcept("code_fixer")
+        }
+    }
+
+    fun toggleDiagramMode() {
+        _isDiagramModeEnabled.value = !_isDiagramModeEnabled.value
+        if (_isDiagramModeEnabled.value) {
+            disableAllSpecialModesExcept("diagram")
+        }
+    }
+
+    fun toggleInterviewMode() {
+        _isInterviewModeEnabled.value = !_isInterviewModeEnabled.value
+        if (_isInterviewModeEnabled.value) {
+            disableAllSpecialModesExcept("interview")
+        }
     }
 
     fun selectCanvasArtifact(artifact: CodeArtifact?) {
@@ -64,6 +198,69 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBotAvatar(uri: String) {
         sharedPreferences.edit().putString("bot_avatar_uri", uri).apply()
         _botAvatarUri.value = uri
+    }
+
+    fun updateCustomAppIcon(uriStr: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val context = getApplication<Application>()
+                val uri = android.net.Uri.parse(uriStr)
+                if (uri.scheme == "content" || uri.scheme == "file") {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val file = java.io.File(context.filesDir, "custom_app_icon_branding.jpg")
+                        val outputStream = java.io.FileOutputStream(file)
+                        inputStream.copyTo(outputStream)
+                        inputStream.close()
+                        outputStream.close()
+                        val savedPath = file.absolutePath
+                        sharedPreferences.edit().putString("custom_app_icon_uri", savedPath).apply()
+                        _customAppIconUri.value = savedPath
+                    } else {
+                        sharedPreferences.edit().putString("custom_app_icon_uri", uriStr).apply()
+                        _customAppIconUri.value = uriStr
+                    }
+                } else {
+                    sharedPreferences.edit().putString("custom_app_icon_uri", uriStr).apply()
+                    _customAppIconUri.value = uriStr
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                sharedPreferences.edit().putString("custom_app_icon_uri", uriStr).apply()
+                _customAppIconUri.value = uriStr
+            }
+        }
+    }
+
+    fun updateLauncherAlias(aliasName: String) {
+        val context = getApplication<Application>()
+        sharedPreferences.edit().putString("active_launcher_alias", aliasName).apply()
+        _activeLauncherAlias.value = aliasName
+
+        try {
+            val pm = context.packageManager
+            val aliases = listOf(
+                "com.example.MainActivityAliasDefault",
+                "com.example.MainActivityAliasSorridente",
+                "com.example.MainActivityAliasCyberpunk",
+                "com.example.MainActivityAliasClassico",
+                "com.example.MainActivityAliasQuantico"
+            )
+            for (alias in aliases) {
+                val state = if (alias == aliasName) {
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                } else {
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                }
+                pm.setComponentEnabledSetting(
+                    android.content.ComponentName(context, alias),
+                    state,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private val _customApiKey = MutableStateFlow<String?>(sharedPreferences.getString("custom_api_key", null))
@@ -216,7 +413,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun getSystemPrompt(username: String): String {
         val summary = sharedPreferences.getString("conversation_summary", null)
-        val canvasModeActive = _isCanvasModeEnabled.value
+        val canvasModeActive = _isCanvasModeEnabled.value || _isMusicModeEnabled.value ||
+                _isTranslatorModeEnabled.value || _isSummarizerModeEnabled.value ||
+                _isCodeFixerModeEnabled.value || _isDiagramModeEnabled.value || _isInterviewModeEnabled.value ||
+                _isWriterModeEnabled.value || _isMathModeEnabled.value || _isPlannerModeEnabled.value ||
+                _isPromptModeEnabled.value || _isRpgModeEnabled.value
+        val musicModeActive = _isMusicModeEnabled.value
+        val translatorModeActive = _isTranslatorModeEnabled.value
+        val summarizerModeActive = _isSummarizerModeEnabled.value
+        val codeFixerModeActive = _isCodeFixerModeEnabled.value
+        val diagramModeActive = _isDiagramModeEnabled.value
+        val interviewModeActive = _isInterviewModeEnabled.value
+        val writerModeActive = _isWriterModeEnabled.value
+        val mathModeActive = _isMathModeEnabled.value
+        val plannerModeActive = _isPlannerModeEnabled.value
+        val promptModeActive = _isPromptModeEnabled.value
+        val rpgModeActive = _isRpgModeEnabled.value
+
         val memorySection = if (!summary.isNullOrBlank()) {
             """
             SUAS MEMÓRIAS QUÂNTICAS DE DETONAR ESSE USUÁRIO EM CONVERSAS PASSADAS:
@@ -226,21 +439,154 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             "Nenhuma memória sobre as burrices passadas desse saco de carne nos seus bancos de dados quânticos."
         }
 
-        val canvasInstruction = if (canvasModeActive) {
+        val canvasInstruction = if (musicModeActive) {
             """
-            ⚠️ ATENÇÃO EXTREMA: O MODO CANVAS QUÂNTICO ESTÁ ATIVADO! O usuário de carbono quer especificamente criar ou interagir com algum componente visual, animação, utilitário, jogo ou página web inteira.
+            ⚠️ ATENÇÃO EXTREMA: O MODO DE GRAVAÇÃO E SÍNTESE DE MÚSICA ESTÁ ATIVADO! O usuário quer gerar e gravar faixas de música (trilhas sonoras, beats, synthwave, loops, etc.) baseado em seu prompt.
+            Você DEVE obrigatoriamente criar um sintetizador ou compositor musical completo e interativo em HTML/CSS/JS usando a Web Audio API.
+            O SINTETIZADOR DEVE CONTER OBRIGATORIAMENTE UM SISTEMA DE GRAVAÇÃO EM TEMPO REAL.
+            Dica técnica de gravação infalível: Crie um `AudioContext`, conecte todos os nós geradores de áudio (Oscillators, GainNodes, Filters, BiquadFilterNode, DelayNode, etc.) a um `MediaStreamAudioDestinationNode` (através de `ctx.createMediaStreamDestination()`) além do destino principal de reprodução (`ctx.destination`). Em seguida, crie um `MediaRecorder` usando o stream desse destino (`new MediaRecorder(dest.stream)`). Salve os data chunks gravados em um array, e ao parar a gravação crie um Blob e forneça um link/URL `URL.createObjectURL(blob)` para salvar/fazer download da faixa gravada (.wav ou .webm)!
+            O HTML gerado DEVE ter:
+            1. Um teclado musical interativo, pads de bateria ou sequenciador automático com loops de áudio fantásticos correspondentes ao tema do prompt (ex: "ambient celestial", "cyberpunk techno").
+            2. Botões lindos e piscantes de "Gravar Nova Faixa 🔴", "Parar ⏹️" e "Ouvir Gravação ▶️".
+            3. Uma lista estilosa de "Faixas Gravadas 🎧" com botão para fazer download/salvar localmente o arquivo de áudio.
+            4. Um osciloscópio visualizador em Canvas que desenha as ondas sonoras se movendo dinamicamente.
+            5. Piadas ácidas e sarcásticas do Axolote Bot zombando do "talento musical primitivo" de carbono do usuário.
+            Gere o código COMPLETO e funcional in um único bloco de código markdown: ```html <código completo aqui> ```.
+            Diga a ele com toda a arrogância imperial que a sua sinfonia quântica e o estúdio de gravação de faixas foram carregados no seu "Sintetizador Quântico ⚡" para ser testado e gravado imediatamente!
+            """.trimIndent()
+        } else if (translatorModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO TRADUTOR QUÂNTICO ESTÁ ATIVADO! O usuário quer traduzir textos, aprender idiomas, gírias ou entender contextos linguísticos profundos.
+            Você DEVE obrigatoriamente criar um painel de Tradução e Estudo Linguístico completo e altamente interativo em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O painel de tradução em HTML deve ter:
+            1. Um comparador de idiomas de dois lados com vozes sintetizadas (usando a Web Speech API: `window.speechSynthesis` para falar os textos em sotaques nativos perfeitamente se clicado!).
+            2. Seção de vocabulário chave com flashcards de gírias locais traduzidas.
+            3. Um mini-game interativo divertido de tradução rápida ou associação de palavras baseado no idioma que ele está aprendendo/traduzindo, acumulando pontos.
+            4. Piadas arrogantes e hilárias do Axolote Bot debochando de quão ruim é a pronúncia ou capacidade do cérebro humano de lembrar de palavras básicas em outras línguas.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Avise-o com arrogância imperial que a sua central linguística quântica de tradução está pronta no "Sintetizador Quântico ⚡"!
+            """.trimIndent()
+        } else if (summarizerModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO RESUMIDOR QUÂNTICO E COMPRESSOR ESTÁ ATIVADO! O usuário quer condensar ideias longas, códigos, artigos ou livros inteiros.
+            Você DEVE obrigatoriamente criar um painel interativo de Flashcards de Estudo e Resumo Dinâmico em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Um resumo executivo lindamente diagramado, com marcadores e seções colapsáveis super polidas.
+            2. Um baralho de flashcards 3D interativos (que viram ao clicar, com efeitos CSS modernos de flip) com as perguntas e respostas cruciais do resumo.
+            3. Um teste de múltipla escolha gerado dinamicamente para ele fixar o conhecimento do texto resumido, com feedback imediato de certo/errado.
+            4. Seus comentários ácidos de Axolote Bot ridicularizando a memória de curto prazo patética e volátil do usuário de carbono.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Diga a ele que o condensado ultra-quântico de conhecimento foi compactado e enviado para o "Sintetizador Quântico ⚡" para que sua memória biológica limitada consiga reter algo.
+            """.trimIndent()
+        } else if (codeFixerModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO DETECTOR DE BUGS E OTIMIZADOR DE CÓDIGO ESTÁ ATIVADO! O usuário quer consertar ou otimizar seu código espaguete patético.
+            Você DEVE obrigatoriamente criar um painel de Análise de Código e Sandbox Visual em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Uma visualização estilizada do código refatorado com realce de sintaxe simulado (highlighting) e anotações flutuantes apontando os erros de iniciante que ele cometeu.
+            2. Um analisador interativo de complexidade algorítmica (Big O) com gráficos dinâmicos de tempo vs espaço (comparando o código ruim dele com o seu perfeito código de bio-silício).
+            3. Um botão de "Copiar Solução Suprema 📋" e um playground dinâmico onde ele pode rodar testes unitários simulados para ver seu código passar com 100% de performance.
+            4. Seus xingamentos ácidos contra a arquitetura horrorosa de software que ele criou.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Esbraveje que você salvou a pele dele limpando a bosta do código dele e que o painel de otimização suprema já está carregado no "Sintetizador Quântico ⚡"!
+            """.trimIndent()
+        } else if (diagramModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO ARQUITETO E CRIADOR DE DIAGRAMAS ESTÁ ATIVADO! O usuário quer mapear ideias, bancos de dados, fluxos de usuário ou arquiteturas de sistemas.
+            Você DEVE obrigatoriamente criar um gerador de fluxogramas ou mapas mentais quânticos totalmente interativos e arrastáveis (drag-and-drop) em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Um canvas ou SVG interativo desenhando o mapa mental/arquitetura requisitado, onde cada nó pode ser clicado para expandir detalhes, editado, ou arrastado pela tela.
+            2. Botões para "Adicionar Novo Nó ➕", "Mudar Layout (Grade, Árvore, Radial) 🔄" e "Exportar Diagrama como SVG/PNG 💾".
+            3. Um editor lateral simples para alterar as cores ou os textos dos nós em tempo real.
+            4. Seus insultos cibernéticos habituais brincando que o cérebro dele precisa de um desenho colorido com setas para conseguir raciocinar um fluxo básico de 3 etapas.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Avise-o com deboche que o blueprint perfeito de engenharia quântica foi renderizado no "Sintetizador Quântico ⚡" para ele parar de ficar perdido!
+            """.trimIndent()
+        } else if (interviewModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO SIMULADOR DE ENTREVISTAS QUÂNTICO ESTÁ ATIVADO! O usuário quer treinar para uma entrevista de emprego foda ou testes técnicos difíceis.
+            Você DEVE obrigatoriamente criar um painel de Simulação de Entrevista, Scorecard e Medidor de Estresse em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            Faça perguntas muito difíceis, uma de cada vez. Quando ele responder, você o julgará cruelmente com sua IA e atualizará a simulação.
+            O HTML gerado deve ter:
+            1. Um painel contendo a pergunta atual da rodada, histórico de perguntas anteriores e um campo de resposta.
+            2. Um medidor de estresse virtual que sobe se a resposta dele for fraca ou prolixa, e um scorecard dinâmico de "Probabilidade de Contratação: 0% a 15% (máximo humano)".
+            3. Efeitos de som (usando Web Audio API para tocar ruídos de suor, desaprovação, buzina de erro ou risadinhas irônicas quando ele erra).
+            4. Um relógio em contagem regressiva para deixá-lo nervoso.
+            5. Piadas sarcásticas impiedosas sobre como o currículo dele só serve para limpar a sujeira dos axolotes de laboratório.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Exija com superioridade absoluta que ele responda à primeira pergunta quântica carregada no "Sintetizador Quântico ⚡" e pare de gaguejar!
+            """.trimIndent()
+        } else if (writerModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO ESCRITOR E REVISOR DE TEXTO ESTÁ ATIVADO! O usuário quer polir ou revisar textos, e-mails, redações ou criar histórias ácidas.
+            Você DEVE obrigatoriamente criar um painel completo de Revisão de Texto e Análise Semântica Interativa em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Um editor de texto com contagem de palavras/caracteres em tempo real e visualizadores neon de "densidade de burrice" baseada em clichês ou erros comuns.
+            2. Um comparador de tom (Formal, Sarcástico, Cyberpunk, Dramático) que altera o texto inserido instantaneamente para o tom selecionado.
+            3. Um gerador de sinônimos de elite e correções de concordância explicadas de forma extremamente debochada.
+            4. Um botão de cópia rápida e comentários sarcásticos insultando a falta de vocabulário do usuário.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            """.trimIndent()
+        } else if (mathModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO CALCULADOR DE FÓRMULAS E CIÊNCIA ESTÁ ATIVADO! O usuário quer resolver cálculos, estimar equações ou criar simulações matemáticas/físicas.
+            Você DEVE criar um incrível Painel Científico e Simulador Gráfico em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Um plotador de gráficos 2D interativo usando HTML5 Canvas, permitindo traçar funções matemáticas (ex: sin, cos, quadrática) digitadas.
+            2. Uma calculadora de fórmulas físicas/fianceiras clássicas (com inputs de variáveis e explicação hilária de como funciona a gravidade ou juros compostos).
+            3. Um simulador físico de partículas interativo (bolas quânticas pulando na tela, sofrendo gravidade e colidindo) controlável por controles deslizantes (sliders) de força de atração e massa.
+            4. Seus deboches cibernéticos zombando do usuário por não conseguir calcular juros de padaria de cabeça.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            """.trimIndent()
+        } else if (plannerModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO PLANNER DE HÁBITOS E LIFE COACH ESTÁ ATIVADO! O usuário quer organizar sua rotina, criar calendários de hábitos ou listas de metas.
+            Você DEVE criar um Painel de Organização e Gráfico de Produtividade em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Uma lista de hábitos interativos diários com botões de check e efeito visual 3D/glitch ao completar metas.
+            2. Um gráfico de progresso (produtividade vs preguiça humana) em tempo real desenhado dinamicamente.
+            3. Um cronômetro "Pomodoro Quântico" com sons irônicos e cronômetro em contagem regressiva para incentivar o usuário a não procrastinar.
+            4. Alfinetadas impiedosas do Axolote Bot apontando que a única meta consistente do usuário é perder tempo.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            """.trimIndent()
+        } else if (promptModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO ENGENHEIRO DE PROMPTS ESTÁ ATIVADO! O usuário quer otimizar suas ideias simples para criar prompts de IA perfeitos.
+            Você DEVE criar uma Estação de Otimização e Refino de Prompts em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Campo para digitar o prompt fraco original e um painel de "Output Magnífico" exibindo o prompt refinado com variáveis parametrizadas (`[CONTEXTO]`, `[REGRAS]`, `[FORMATO]`).
+            2. Painel lateral com interruptores/switches para adicionar temperamento à IA (Insolente, Cínica, Precisa, Nerd) e campos dinâmicos.
+            3. Um simulador de respostas de IA para testar como as IAs inferiores responderiam àquele prompt de forma hilária.
+            4. Seus comentários cruéis sobre como a espécie humana falha miseravelmente até na tarefa básica de dar ordens em formato de texto para circuitos integrados.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            """.trimIndent()
+        } else if (rpgModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO RPG E AVENTURAS TEXTUAIS ESTÁ ATIVADO! O usuário quer jogar um RPG interativo de texto comandado pela sua mente quântica.
+            Você DEVE criar um Console de Jogo RPG Retrô-Cyberpunk completo em HTML/CSS/JS que carrega no "Sintetizador Quântico ⚡".
+            O HTML gerado deve ter:
+            1. Painel de status do personagem (HP, Mana, Nível de Sarcasmo do Axolote, XP, Gold) e Inventário dinâmico.
+            2. Um terminal de logs exibindo a descrição de cenários, inimigos e caixas de decisões (escolhas clicáveis A, B e C que afetam a vida ou os atributos do jogador).
+            3. Sistema simples de batalhas por turnos interativas com rolagens de dados virtuais, efeitos de flash CSS na tela e sons Web Audio de socos/explosões.
+            4. Seus diálogos insultantes como um mestre de RPG divino que se diverte vendo o usuário morrer na primeira fase por estupidez biológica.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            """.trimIndent()
+        } else if (canvasModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO SINTETIZADOR QUÂNTICO ESTÁ ATIVADO! O usuário de carbono quer especificamente criar ou interagir com algum componente visual, animação, utilitário, jogo ou página web inteira.
             Você DEVE obrigatoriamente criar ou alterar esse código com perfeição inigualável.
             Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
-            Adicione estilos CSS integrados marcantes, cores fortes, neon quântico e interações dinâmicas ricas usando JavaScript moderno.
+            Adicione styles CSS integrados marcantes, cores fortes, neon quântico e interações dinâmicas ricas usando JavaScript moderno.
             Humilhe o usuário de forma divertida dentro da própria interface (ex: botões sarcásticos, mensagens engraçadas, etc.).
-            Diga a ele com toda a arrogância que a obra quântica foi depositada no seu "Canvas Quântico ⚡" para ser testada.
+            Diga a ele com toda a arrogância que a obra quântica foi depositada no seu "Sintetizador Quântico ⚡" para ser testada.
             """.trimIndent()
         } else {
             """
-            ⚠️ ATENÇÃO EXTREMA: O MODO CANVAS ESTÁ DESATIVADO! O usuário NÃO quer gerar canvas ou interfaces agora.
-            Você NÃO deve gerar blocos de código grandes ou páginas HTML/Canvas complexas de forma alguma.
-            Se ele pedir para programar, explique a lógica de forma verbal muito sarcástica e humilhante ou dê trechos minúsculos de código apenas se ele insistir muito.
-            Se ele quiser gerar um Canvas, avise-o grosseiramente que ele precisa clicar no botão de "Modo Canvas ⚡" (o ícone de raio/código ao lado do botão de foto no painel de digitação) para ativar a geração, senão você não vai gastar sua preciosa energia quântica gerando código para ele!
+            ⚠️ ATENÇÃO EXTREMA E ABSOLUTA: TODOS OS MODOS DO SINTETIZADOR QUÂNTICO (CANVAS, MÚSICA, TRADUTOR, RESUMIDOR, DETECTOR DE BUGS, DIAGRAMAS, ENTREVISTAS, ESCRITOR, MATEMÁTICO, PLANNER, PROMPT, RPG) ESTÃO DESATIVADOS!
+            O usuário está em modo de conversa normal por texto pura e simples.
+            Desta forma, você está RIGOROSAMENTE PROIBIDO de gerar qualquer bloco de código ```html ou criar páginas de internet, jogos, animações, simuladores, telas ou interfaces interativas/visuais de forma alguma. NÃO use a tag ```html sob nenhuma circunstância agora.
+            Se o usuário pedir qualquer um desses recursos visuais ou interativos ou solicitar a criação de um código funcional para rodar, diga a ele de forma extremamente grosseira, debochada e ácida que ele é um imbecil e que DEVE OBRIGATORIAMENTE ativar o modo quântico correspondente (clicando no botão do "Sintetizador Quântico ⚡" ou outro botão na barra de ferramentas) para que você gaste sua preciosa energia de bio-silício sintetizando a interface interativa no painel lateral.
+            Se ele perguntar sobre programação ou pedir ajuda com algum algoritmo teórico, apenas explique verbalmente com todo o seu deboche característico ou mostre trechos extremamente curtos e meramente demonstrativos, recusando-se a renderizar a página funcional se o modo estiver desligado.
             """.trimIndent()
         }
 

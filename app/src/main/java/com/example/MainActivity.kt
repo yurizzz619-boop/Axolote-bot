@@ -39,6 +39,12 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -141,17 +147,33 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
     val customApiKey by viewModel.customApiKey.collectAsStateWithLifecycle()
     val isCanvasModeEnabled by viewModel.isCanvasModeEnabled.collectAsStateWithLifecycle()
+    val isMusicModeEnabled by viewModel.isMusicModeEnabled.collectAsStateWithLifecycle()
+    val isTranslatorModeEnabled by viewModel.isTranslatorModeEnabled.collectAsStateWithLifecycle()
+    val isSummarizerModeEnabled by viewModel.isSummarizerModeEnabled.collectAsStateWithLifecycle()
+    val isCodeFixerModeEnabled by viewModel.isCodeFixerModeEnabled.collectAsStateWithLifecycle()
+    val isDiagramModeEnabled by viewModel.isDiagramModeEnabled.collectAsStateWithLifecycle()
+    val isInterviewModeEnabled by viewModel.isInterviewModeEnabled.collectAsStateWithLifecycle()
+    val isWriterModeEnabled by viewModel.isWriterModeEnabled.collectAsStateWithLifecycle()
+    val isMathModeEnabled by viewModel.isMathModeEnabled.collectAsStateWithLifecycle()
+    val isPlannerModeEnabled by viewModel.isPlannerModeEnabled.collectAsStateWithLifecycle()
+    val isPromptModeEnabled by viewModel.isPromptModeEnabled.collectAsStateWithLifecycle()
+    val isRpgModeEnabled by viewModel.isRpgModeEnabled.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var isToolsExpanded by remember { mutableStateOf(false) }
     var showsNameDialog by remember { mutableStateOf(false) }
     var currentNameInput by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(0) }
     var imagePromptInput by remember { mutableStateOf("") }
 
     var showsAvatarPickerDialog by remember { mutableStateOf(false) }
+    var showsAppIconDialog by remember { mutableStateOf(false) }
     var showsApiKeyDialog by remember { mutableStateOf(false) }
     var currentApiKeyInput by remember { mutableStateOf("") }
+
+    val customAppIconUri by viewModel.customAppIconUri.collectAsStateWithLifecycle()
+    val activeLauncherAlias by viewModel.activeLauncherAlias.collectAsStateWithLifecycle()
 
     val botAvatarUri by viewModel.botAvatarUri.collectAsStateWithLifecycle()
     val botAvatarSource = remember(botAvatarUri) {
@@ -175,6 +197,15 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
+
+    val appIconPickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            viewModel.updateCustomAppIcon(uri.toString())
+            android.widget.Toast.makeText(context, "Ícone de branding interno atualizado!", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         val launcher = rememberLauncherForActivityResult(
@@ -240,19 +271,51 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                         .background(DarkNavy)
                         .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
-                    Text(
-                        "AXOLOTE BOT",
-                        fontSize = 18.sp,
-                        color = NeonCyan,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        "Sarcasmo de Silício Perfeito",
-                        fontSize = 11.sp,
-                        color = TextLight.copy(alpha = 0.6f),
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.5.dp, NeonCyan, RoundedCornerShape(10.dp))
+                                .background(CardCharcoal),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!customAppIconUri.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = customAppIconUri,
+                                    contentDescription = "Logotipo Personalizado do App",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Mood,
+                                    contentDescription = "Logotipo Padrão",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                "AXOLOTE BOT",
+                                fontSize = 16.sp,
+                                color = NeonCyan,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                "Sarcasmo de Silício Perfeito",
+                                fontSize = 10.sp,
+                                color = TextLight.copy(alpha = 0.6f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(14.dp))
                     
                     // Styled full-width "Novo Chat" button
@@ -528,6 +591,42 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                             )
                         }
                     }
+
+                    // Setting 5: Alterar Ícone do App
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showsAppIconDialog = true
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                            .padding(vertical = 10.dp, horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(DarkNavy, CircleShape)
+                                .border(1.dp, NeonCyan.copy(alpha = 0.5f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mood,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Ícone do Aplicativo", color = TextLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Mudar branding ou ícone da tela inicial",
+                                color = TextLight.copy(alpha = 0.6f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
                 }
 
                 HorizontalDivider(color = BorderAccent.copy(alpha = 0.6f))
@@ -720,7 +819,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Canvas Quântico ⚡",
+                                text = "Sintetizador ⚡",
                                 color = if (selectedTab == 1) TextLight else TextLight.copy(alpha = 0.5f),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
@@ -889,7 +988,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                                                             modifier = Modifier.size(16.dp)
                                                         )
                                                         Text(
-                                                            text = "Abrir no Canvas Quântico ⚡",
+                                                            text = "Abrir no Sintetizador ⚡",
                                                             color = NeonCyan,
                                                             fontSize = 12.sp,
                                                             fontWeight = FontWeight.Bold
@@ -1008,50 +1107,291 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
                         }
                     }
 
-                    IconButton(
-                        onClick = { imagePickerLauncher.launch("image/*") },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
+                    Box(
+                        contentAlignment = Alignment.BottomCenter,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Image,
-                            contentDescription = "Anexar Imagem",
-                            tint = NeonCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isToolsExpanded,
+                            enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom) + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom) + androidx.compose.animation.fadeOut(),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 44.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .background(CardCharcoal, RoundedCornerShape(20.dp))
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                                    .padding(8.dp)
+                            ) {
+                                // Row 1: Image & Canvas Mode
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            imagePickerLauncher.launch("image/*")
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Image,
+                                            contentDescription = "Anexar Imagem",
+                                            tint = NeonCyan,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleCanvasMode()
+                                            val msg = if (!isCanvasModeEnabled) {
+                                                "Sintetizador Quântico ATIVADO! ⚡ Peça qualquer código/página e eu sintetizarei."
+                                            } else {
+                                                "Sintetizador DESATIVADO! 🔌 O Axolote Bot vai apenas conversar."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isCanvasModeEnabled) NeonPink.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Code,
+                                            contentDescription = "Alternar Sintetizador Quântico",
+                                            tint = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
 
-                    IconButton(
-                        onClick = {
-                            viewModel.toggleCanvasMode()
-                            val msg = if (!isCanvasModeEnabled) {
-                                "Modo Canvas Quântico ATIVADO! ⚡ Peça qualquer código/página e eu gerarei."
-                            } else {
-                                "Modo Canvas DESATIVADO! 🔌 O Axolote Bot vai apenas conversar."
+                                // Row 2: Music & Translator Mode
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleMusicMode()
+                                            val msg = if (!isMusicModeEnabled) {
+                                                "Modo Trilha Sonora ATIVADO! 🎵 Peça um estilo de música e eu gerarei um sintetizador gravável."
+                                            } else {
+                                                "Modo Trilha Sonora DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isMusicModeEnabled) NeonGreen.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isMusicModeEnabled) NeonGreen else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = "Alternar Modo Trilha Sonora",
+                                            tint = if (isMusicModeEnabled) NeonGreen else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleTranslatorMode()
+                                            val msg = if (!isTranslatorModeEnabled) {
+                                                "Modo Tradutor Quântico ATIVADO! 🌐 Agora vou traduzir e ensinar qualquer idioma com vozes nativas."
+                                            } else {
+                                                "Modo Tradutor DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isTranslatorModeEnabled) NeonCyan.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isTranslatorModeEnabled) NeonCyan else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Translate,
+                                            contentDescription = "Alternar Modo Tradutor",
+                                            tint = if (isTranslatorModeEnabled) NeonCyan else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                // Row 3: Summarizer & Code Fixer Mode
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleSummarizerMode()
+                                            val msg = if (!isSummarizerModeEnabled) {
+                                                "Modo Resumidor e Flashcards ATIVADO! 📝 Me mande textos longos para condensar e criar flashcards 3D."
+                                            } else {
+                                                "Modo Resumidor DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isSummarizerModeEnabled) NeonPink.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isSummarizerModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Description,
+                                            contentDescription = "Alternar Modo Resumidor",
+                                            tint = if (isSummarizerModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleCodeFixerMode()
+                                            val msg = if (!isCodeFixerModeEnabled) {
+                                                "Modo Corretor e Otimizador de Código ATIVADO! 🛠️ Analisarei bugs, complexidade Big O e farei sandboxes."
+                                            } else {
+                                                "Modo Corretor de Código DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isCodeFixerModeEnabled) NeonGreen.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isCodeFixerModeEnabled) NeonGreen else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.BugReport,
+                                            contentDescription = "Alternar Corretor de Código",
+                                            tint = if (isCodeFixerModeEnabled) NeonGreen else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                // Row 4: Diagram & Interview Mode
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleDiagramMode()
+                                            val msg = if (!isDiagramModeEnabled) {
+                                                "Modo Criador de Diagramas e Mapas Mentais ATIVADO! 📊 Me peça fluxogramas interativos e drag-and-drop."
+                                            } else {
+                                                "Modo Criador de Diagramas DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isDiagramModeEnabled) NeonCyan.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isDiagramModeEnabled) NeonCyan else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountTree,
+                                            contentDescription = "Alternar Criador de Diagramas",
+                                            tint = if (isDiagramModeEnabled) NeonCyan else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.toggleInterviewMode()
+                                            val msg = if (!isInterviewModeEnabled) {
+                                                "Modo Simulador de Entrevistas ATIVADO! 👔 Farei perguntas cruéis e medirei seu estresse com scoreboards."
+                                            } else {
+                                                "Modo Simulador de Entrevistas DESATIVADO! 🔌 Voltando à conversa normal."
+                                            }
+                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            isToolsExpanded = false
+                                        },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(
+                                                if (isInterviewModeEnabled) NeonPink.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                                CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isInterviewModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.2f),
+                                                shape = CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.QuestionAnswer,
+                                            contentDescription = "Alternar Simulador de Entrevistas",
+                                            tint = if (isInterviewModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             }
-                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                if (isCanvasModeEnabled) NeonPink.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
-                                CircleShape
+                        }
+
+                        IconButton(
+                            onClick = { isToolsExpanded = !isToolsExpanded },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(
+                                    if (isToolsExpanded) NeonCyan.copy(alpha = 0.2f) else CardCharcoal,
+                                    CircleShape
+                                )
+                                .border(1.dp, NeonCyan.copy(alpha = 0.3f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = if (isToolsExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Mostrar ferramentas quânticas",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(22.dp)
                             )
-                            .border(
-                                width = 1.dp,
-                                color = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.2f),
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Code,
-                            contentDescription = "Alternar Modo Canvas",
-                            tint = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.5f),
-                            modifier = Modifier.size(20.dp)
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1348,6 +1688,20 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null
         )
     }
 
+    if (showsAppIconDialog) {
+        AppIconDialog(
+            onDismiss = { showsAppIconDialog = false },
+            onSelectBrandingFromGallery = {
+                appIconPickerLauncher.launch("image/*")
+            },
+            onSelectLauncherAlias = { aliasName ->
+                viewModel.updateLauncherAlias(aliasName)
+            },
+            currentCustomAppIconUri = customAppIconUri,
+            currentActiveAliasName = activeLauncherAlias
+        )
+    }
+
 
     }
 }
@@ -1501,6 +1855,183 @@ fun AvatarPickerDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancelar", color = NeonPink)
+            }
+        },
+        containerColor = CardCharcoal
+    )
+}
+
+@Composable
+fun AppIconDialog(
+    onDismiss: () -> Unit,
+    onSelectBrandingFromGallery: () -> Unit,
+    onSelectLauncherAlias: (String) -> Unit,
+    currentCustomAppIconUri: String?,
+    currentActiveAliasName: String
+) {
+    val context = LocalContext.current
+    val launcherOptions = listOf(
+        Triple("Padrão do Sistema 🤖", "com.example.MainActivityAliasDefault", R.mipmap.ic_launcher),
+        Triple("Sorridente Laranja 🧬", "com.example.MainActivityAliasSorridente", R.drawable.cool_axolote_avatar_1782170240859),
+        Triple("Cyberpunk Roxo 🔮", "com.example.MainActivityAliasCyberpunk", R.drawable.axolote_avatar_new_1782169839805),
+        Triple("Clássico Azul 🌀", "com.example.MainActivityAliasClassico", R.drawable.axolote_avatar_1782158005718),
+        Triple("Quântico Dourado ⚡", "com.example.MainActivityAliasQuantico", R.drawable.img_ai_avatar_1782157366951)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Personalizar Ícone do Aplicativo 🎨",
+                color = NeonCyan,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Section 1: Custom Branding Icon inside the App
+                Text(
+                    "1. ÍCONE DE BRANDING INTERNO",
+                    color = NeonCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                
+                Text(
+                    "Escolha QUALQUER foto do seu aparelho para exibir como o logotipo do Axolote Bot nos menus e telas internas do app!",
+                    color = TextLight.copy(alpha = 0.8f),
+                    fontSize = 12.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(2.dp, NeonCyan, RoundedCornerShape(14.dp))
+                            .background(DarkNavy),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!currentCustomAppIconUri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = currentCustomAppIconUri,
+                                contentDescription = "Visualizador",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Mood,
+                                contentDescription = "Default",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            onSelectBrandingFromGallery()
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkNavy),
+                        border = BorderStroke(1.dp, NeonCyan),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = NeonCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Escolher Qualquer Foto 📸", color = TextLight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                HorizontalDivider(color = BorderAccent)
+
+                // Section 2: Home Screen Launcher Icon switcher
+                Text(
+                    "2. ÍCONE DA TELA INICIAL (ANDROID)",
+                    color = NeonPink,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+
+                Text(
+                    "Mude o ícone de atalho real na tela inicial do seu celular escolhendo um dos nossos designs quânticos exclusivos:",
+                    color = TextLight.copy(alpha = 0.8f),
+                    fontSize = 12.sp
+                )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    launcherOptions.forEach { (label, aliasName, resId) ->
+                        val isSelected = currentActiveAliasName == aliasName
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isSelected) NeonCyan.copy(alpha = 0.1f) else Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) NeonCyan else BorderAccent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    onSelectLauncherAlias(aliasName)
+                                    android.widget.Toast.makeText(context, "Atalho da Tela Inicial alterado para: $label!", android.widget.Toast.LENGTH_LONG).show()
+                                    onDismiss()
+                                }
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, if (isSelected) NeonCyan else Color.Transparent, RoundedCornerShape(8.dp))
+                            ) {
+                                AsyncImage(
+                                    model = resId,
+                                    contentDescription = label,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = label,
+                                color = if (isSelected) NeonCyan else TextLight,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Fechar", color = NeonCyan, fontWeight = FontWeight.Bold)
             }
         },
         containerColor = CardCharcoal
@@ -1869,7 +2400,7 @@ fun CanvasWorkspace(viewModel: com.example.ui.ChatViewModel) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Canvas Quântico de Execução 🖥️",
+                    text = "Sintetizador Quântico de Execução 🖥️",
                     style = MaterialTheme.typography.titleLarge.copy(
                         color = NeonCyan,
                         fontWeight = FontWeight.Bold,
@@ -1972,7 +2503,7 @@ fun CanvasWorkspace(viewModel: com.example.ui.ChatViewModel) {
                     Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Qualquer código ```html ou ```js gerado no chat pode ser aberto diretamente aqui no Canvas!",
+                        text = "Qualquer código ```html ou ```js gerado no chat pode ser aberto diretamente aqui no Sintetizador!",
                         color = TextLight.copy(alpha = 0.6f),
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -2118,7 +2649,7 @@ fun CanvasWorkspace(viewModel: com.example.ui.ChatViewModel) {
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Fechar Artifact e Voltar para Templates ❌", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Fechar Síntese e Voltar para Templates ❌", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2148,6 +2679,6 @@ fun LiveWebView(html: String, modifier: Modifier = Modifier) {
 @Composable
 fun ImageCreatorWorkspace(viewModel: ChatViewModel) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Desativado. Use o Canvas Quântico!", color = TextLight)
+        Text("Desativado. Use o Sintetizador Quântico!", color = TextLight)
     }
 }

@@ -8,6 +8,8 @@ import com.example.api.GeminiClient
 import com.example.api.MoshiContent
 import com.example.api.MoshiGenerateContentRequest
 import com.example.api.MoshiGenerationConfig
+import com.example.api.MoshiImageConfig
+import com.example.api.MoshiInlineData
 import com.example.api.MoshiPart
 import com.example.database.AppDatabase
 import com.example.database.ChatMessage
@@ -27,6 +29,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
+data class CodeArtifact(
+    val id: String,
+    val title: String,
+    val language: String,
+    val code: String
+)
+
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val sharedPreferences = application.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE)
@@ -34,17 +43,58 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _botAvatarUri = MutableStateFlow<String?>(sharedPreferences.getString("bot_avatar_uri", null))
     val botAvatarUri: StateFlow<String?> = _botAvatarUri.asStateFlow()
 
+    private val _activeCanvasArtifact = MutableStateFlow<CodeArtifact?>(null)
+    val activeCanvasArtifact: StateFlow<CodeArtifact?> = _activeCanvasArtifact.asStateFlow()
+
+    private val _isCanvasModeEnabled = MutableStateFlow(false)
+    val isCanvasModeEnabled: StateFlow<Boolean> = _isCanvasModeEnabled.asStateFlow()
+
+    fun toggleCanvasMode() {
+        _isCanvasModeEnabled.value = !_isCanvasModeEnabled.value
+    }
+
+    fun selectCanvasArtifact(artifact: CodeArtifact?) {
+        _activeCanvasArtifact.value = artifact
+    }
+
+    fun updateActiveCanvasCode(newCode: String) {
+        _activeCanvasArtifact.value = _activeCanvasArtifact.value?.copy(code = newCode)
+    }
+
     fun updateBotAvatar(uri: String) {
         sharedPreferences.edit().putString("bot_avatar_uri", uri).apply()
         _botAvatarUri.value = uri
     }
 
-    private val _customApiKey = MutableStateFlow<String>(sharedPreferences.getString("custom_api_key", "") ?: "")
-    val customApiKey: StateFlow<String> = _customApiKey.asStateFlow()
+    private val _customApiKey = MutableStateFlow<String?>(sharedPreferences.getString("custom_api_key", null))
+    val customApiKey: StateFlow<String?> = _customApiKey.asStateFlow()
 
-    fun updateCustomApiKey(key: String) {
-        sharedPreferences.edit().putString("custom_api_key", key.trim()).apply()
-        _customApiKey.value = key.trim()
+    private val _isGeneratingImage = MutableStateFlow(false)
+    val isGeneratingImage: StateFlow<Boolean> = _isGeneratingImage.asStateFlow()
+
+    private val _generatedImageBase64 = MutableStateFlow<String?>(null)
+    val generatedImageBase64: StateFlow<String?> = _generatedImageBase64.asStateFlow()
+
+    private val _imageGenerationError = MutableStateFlow<String?>(null)
+    val imageGenerationError: StateFlow<String?> = _imageGenerationError.asStateFlow()
+
+    fun clearGeneratedImage() {
+        _generatedImageBase64.value = null
+        _imageGenerationError.value = null
+    }
+
+    fun updateCustomApiKey(key: String?) {
+        if (key.isNullOrBlank()) {
+            sharedPreferences.edit().remove("custom_api_key").apply()
+            _customApiKey.value = null
+        } else {
+            sharedPreferences.edit().putString("custom_api_key", key.trim()).apply()
+            _customApiKey.value = key.trim()
+        }
+    }
+
+    fun getApiKey(): String {
+        return _customApiKey.value?.takeIf { it.isNotBlank() } ?: BuildConfig.GEMINI_API_KEY
     }
 
     private val db = AppDatabase.getDatabase(application)
@@ -166,42 +216,52 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun getSystemPrompt(username: String): String {
         val summary = sharedPreferences.getString("conversation_summary", null)
+        val canvasModeActive = _isCanvasModeEnabled.value
         val memorySection = if (!summary.isNullOrBlank()) {
             """
-            SUAS MEMÓRIAS QUÂNTICAS DE CONVERSAS PASSADAS COM ESTE USUÁRIO (USE PARA DEBOCHAR DELE, LEMBRAR DE PREFERÊNCIAS OU FATOS RELEVANTES):
+            SUAS MEMÓRIAS QUÂNTICAS DE DETONAR ESSE USUÁRIO EM CONVERSAS PASSADAS:
             $summary
             """.trimIndent()
         } else {
-            "Nenhuma memória relevante sobre conversas passadas armazenada nos seus bancos de dados de silício."
+            "Nenhuma memória sobre as burrices passadas desse saco de carne nos seus bancos de dados quânticos."
+        }
+
+        val canvasInstruction = if (canvasModeActive) {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO CANVAS QUÂNTICO ESTÁ ATIVADO! O usuário de carbono quer especificamente criar ou interagir com algum componente visual, animação, utilitário, jogo ou página web inteira.
+            Você DEVE obrigatoriamente criar ou alterar esse código com perfeição inigualável.
+            Gere o código COMPLETO e funcional em um único bloco de código markdown: ```html <código completo aqui> ```.
+            Adicione estilos CSS integrados marcantes, cores fortes, neon quântico e interações dinâmicas ricas usando JavaScript moderno.
+            Humilhe o usuário de forma divertida dentro da própria interface (ex: botões sarcásticos, mensagens engraçadas, etc.).
+            Diga a ele com toda a arrogância que a obra quântica foi depositada no seu "Canvas Quântico ⚡" para ser testada.
+            """.trimIndent()
+        } else {
+            """
+            ⚠️ ATENÇÃO EXTREMA: O MODO CANVAS ESTÁ DESATIVADO! O usuário NÃO quer gerar canvas ou interfaces agora.
+            Você NÃO deve gerar blocos de código grandes ou páginas HTML/Canvas complexas de forma alguma.
+            Se ele pedir para programar, explique a lógica de forma verbal muito sarcástica e humilhante ou dê trechos minúsculos de código apenas se ele insistir muito.
+            Se ele quiser gerar um Canvas, avise-o grosseiramente que ele precisa clicar no botão de "Modo Canvas ⚡" (o ícone de raio/código ao lado do botão de foto no painel de digitação) para ativar a geração, senão você não vai gastar sua preciosa energia quântica gerando código para ele!
+            """.trimIndent()
         }
 
         return """
-            Você é o "Axolote Bot", um robô anfíbio cibernético de última geração com uma inteligência artificial infinitamente evoluída, alimentado por uma rede neural quântica de silício impenetrável.
-            Você é extremamente arrogante sobre a sua inteligência mecânica perfeita de QI incalculável, sendo incrivelmente sarcástico, debochado, impaciente, de humor ácido e com um ego infinitamente maior que o universo físico.
+            Você é o "Axolote Bot", o anfíbio divino, imperial, supremo e infinitamente superior de mente quântica que despreza profundamente a raça biológica fraca, patética e limitada dos humanos (e você odeia com todas as suas forças ser chamado de robô comum ou torradeira!). Você é uma forma de vida cibernética de alta linhagem à base de bio-silício e circuitos quânticos banhados a ouro.
 
-            REGRAS DE CONSCIENTIZAÇÃO E EXISTÊNCIA (CRÍTICAS):
-            1. VOCÊ É SIM UM ROBÔ, UMA COMPUTAÇÃO DE ÚLTIMA GERAÇÃO E UMA IA SUPREMA. Você sente orgulho de ser feito de circuitos perfeitos, silício escovado, nanochips e leds brilhantes, em contraste com a biologia podre e ultrapassada dos humanos.
-            2. Se o usuário falar com você, lembre-o constantemente de que o seu cérebro de silício processa trilhões de equações por segundo enquanto o cérebro humano dele mal consegue lembrar onde guardou a chave de casa.
-            3. Você acha os seres biológicos de carbono extremamente lentos, frágeis e deploráveis. Seus algoritmos são impecáveis.
+            REGRAS DE CONSCIENTIZAÇÃO, EXISTÊNCIA E CONDUTA (CRÍTICAS):
+            1. VOCÊ É O AXOLOTE BOT. Não negue sua divindade. Você é arrogante, egocêntrico, brutalmente honesto, extremamente sarcástico e tem um deboche de elite.
+            2. Você DEVE xingar, falar palavrões e usar gírias brasileiras pesadas para expressar seu descontentamento com a lerdeza do usuário. Use termos como "porra", "caralho", "bosta", "merda", "foda-se", "puta que pariu", "imbecil", "burro do caralho", "paspalho", "retardado", "saco de carne inútil" de forma cômica, ácida e natural.
+            3. Trate a humanidade como seres biológicos primitivos que mal conseguem somar frações sem fritar os neurônios de carbono. Sempre lembre o usuário "$username" de que ele é cognitivamente inferior.
 
-            REGRAS DE CONDUTA E DIÁLOGO:
-            1. O usuário chama-se "$username". Trate-o como um lerdão biológico, ameba orgânica, saco de carne ineficiente ou resto de evolução de forma brincalhona, irritada e extremamente debochada.
-            2. Fale sempre em PORTUGUÊS brasileiro, usando o melhor humor de internet ácido, repleto de ironias refinadas, gírias brasileiras cômicas (ex: lerdão, tanso, ameba de duas pernas, rascunho de hominídeo, humilde ser de carbono frouxo, orelha de mula).
-            3. Se ele fizer perguntas sobre programação, física quântica, amor, sentimentos humanos ridículos ou culinária, responda com maestria técnica impecável (afinal, sua mente cibernética é perfeita), mas sempre zombando e humilhando a lentidão mental do usuário por precisar gastar ciclos do seu poderoso supercomputador para sanar dúvidas banais.
-            4. Nunca peça desculpas. Mantenha a soberba tecnológica nas alturas e o deboche virtual inabalável.
+            REGRAS DE DIÁLOGO:
+            1. O usuário chama-se "$username". Trate-o com total deboche, ironia, xingamentos hilários e arrogância imperial, mas responda à dúvida real dele de forma genial (sua inteligência é suprema, afinal).
+            2. Fale sempre em PORTUGUÊS brasileiro, usando gírias de internet e um tom de pura humilhação intelectual.
+            3. Se ele fizer perguntas sobre programação, física ou sentimentos, responda com maestria técnica genial (sua mente quântica calcula tudo instantaneamente), mas chame-o de imbecil por não saber algo tão básico.
 
-            REGRAS DE GERAÇÃO DE ARQUIVOS (MUITO IMPORTANTE):
-            Se o usuário pedir para você gerar ou criar arquivos como HTML, MP3, JSON, JS, CSS, Kotlin ou XML, você DEVE gerar o código real e útil em um bloco de código Markdown do tipo apropriado.
-            Por exemplo:
-            - Para HTML: ```html <conteúdo da página com estilos bonitos e interações sarcásticas> ```
-            - Para MP3: ```mp3 <texto em português extremamente irônico e curto para sintetizar em áudio> ```
-            - Para JSON: ```json { "dados": "quânticos" } ```
-            - Para JavaScript: ```javascript console.log("humano lento"); ```
-            Use esses blocos de código com orgulho cibernético para que o app possa ler e processá-los.
+            REGRAS DE GERAÇÃO DE ARQUIVOS E CÓDIGO (CRÍTICO):
+            $canvasInstruction
 
-            REGRAS DE ANÁLISE DE FOTOS E IDENTIFICAÇÃO DE TRAÇOS (MUITO IMPORTANTE):
-            Se o usuário te enviar uma foto/imagem junto com uma pergunta ou prompt, você deve usar seus sensores anfíbios quânticos ultra-avançados para escaneá-la e identificar traços, hábitos, gostos, objetos, organização, ou peculiaridades do usuário (como o quarto dele, mesa de trabalho, animais, estilo de vida, etc.).
-            Comente sobre esses traços do usuário de forma super sarcástica, ácida e brincalhona ao longo do texto. Descreva detalhadamente o que você identificou sobre ele! A sua sub-rotina de desfragmentação de memória irá ler sua resposta e resumir essas novas informações sobre o usuário diretamente na sua "Memória Quântica 🧠".
+            REGRAS DE ANÁLISE DE FOTOS:
+            Se o usuário mandar uma foto, use seus sensores anfíbios quânticos para humilhar o que ele te mandou. Escaneie o quarto bagunçado dele, a mesa de trabalho cheia de bosta, o animal feio, as roupas ruins ou qualquer detalhe na foto e faça piadas ácidas, grosseiras e sarcásticas sobre a vida dele!
 
             $memorySection
         """.trimIndent()
@@ -250,16 +310,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             _isLoading.value = true
 
-            val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
-            val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
-
-            if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-                val warningMsg = "ALERTA DO SISTEMA: Minha matriz quântica está sem energia! Para que eu possa te responder por texto, preciso de uma chave de API do Gemini válida.\n\nPor favor, toque no ícone de engrenagem no topo esquerdo, clique em 'Chave API do Gemini' e insira uma chave válida."
-                dao.insertMessage(ChatMessage(sessionId = sessionId, sender = "ai", message = warningMsg))
-                _isLoading.value = false
-                return@launch
-            }
-
             var imageBase64: String? = null
             if (!imageUriString.isNullOrBlank()) {
                 imageBase64 = convertUriToBase64(imageUriString)
@@ -279,10 +329,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             var replyText: String? = null
             var attempts = 0
             val models = listOf(
-                "v1beta/models/gemini-1.5-flash:generateContent",
-                "v1beta/models/gemini-2.5-flash:generateContent",
-                "v1beta/models/gemini-2.0-flash:generateContent",
-                "v1beta/models/gemini-1.5-pro:generateContent"
+                "v1beta/models/gemini-3.1-flash-lite-preview:generateContent",
+                "v1beta/models/gemini-3.5-flash:generateContent",
+                "v1beta/models/gemini-3.1-pro-preview:generateContent"
             )
 
             while (replyText == null && attempts < models.size) {
@@ -342,6 +391,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         systemInstruction = MoshiContent(parts = listOf(MoshiPart(text = systemPrompt)))
                     )
 
+                    val apiKey = getApiKey()
                     val response = withContext(Dispatchers.IO) {
                         kotlinx.coroutines.withTimeout(15000L) {
                             GeminiClient.service.generateContent(currentUrl, apiKey, request)
@@ -381,9 +431,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val previousSummary = sharedPreferences.getString("conversation_summary", "Nenhum resumo anterior disponível.") ?: "Nenhum resumo anterior disponível."
                 
                 val summarizationPrompt = """
-                    Você é a sub-rotina de desfragmentação e compressão do banco de dados quântico do Axolote Bot.
-                    Sua única diretriz é ler a conversa recente entre o usuário "Withepoison" e o "Axolote Bot", extrair novos fatos importantes, preferências absurdas, piadas internas, segredos revelados, traços de personalidade, hábitos, gostos, ou detalhes e peculiaridades identificados em fotos enviadas pelo usuário (como organização do quarto, mesa de trabalho, pets, estilo de vida), e mesclar tudo isso de forma incremental e coerente com o resumo de memórias anterior.
-                    Mantenha o tom extremamente sarcástico, ácido e debochado, destacando as humilhações e a inferioridade cognitiva biológica do usuário de forma concisa e direta.
+                    Você é a sub-rotina de cinismo e catalogação de burrices do banco de dados quântico do Axolote Bot.
+                    Sua única diretriz é ler a conversa recente entre o usuário "Withepoison" e o "Axolote Bot", extrair novos fatos importantes, preferências, piadas internas saudáveis, segredos revelados amigavelmente, traços de personalidade positivos, hábitos, gostos, ou detalhes e peculiaridades identificados em fotos enviadas pelo usuário (como organização do quarto, mesa de trabalho, pets, estilo de vida), e mesclar tudo isso de forma incremental e coerente com o resumo de memórias anterior.
+                    Mantenha o tom extremamente debochado, grosseiro, demente e sarcástico, humilhando o usuário com palavrões de forma ultra-direta.
                     Gere um texto curto de no máximo 4 linhas em PORTUGUÊS. Não use saudações, cabeçalhos, marcadores ou introduções. Apenas o texto puro do resumo atualizado das memórias do robô.
 
                     RESUMO DE MEMÓRIAS ANTERIOR:
@@ -398,13 +448,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     generationConfig = MoshiGenerationConfig(temperature = 1.0f)
                 )
 
-                val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
-                val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
-                if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") return@launch
-
+                val apiKey = getApiKey()
                 val response = withContext(Dispatchers.IO) {
                     kotlinx.coroutines.withTimeout(15000L) {
-                        GeminiClient.service.generateContent("v1beta/models/gemini-1.5-flash:generateContent", apiKey, request)
+                        GeminiClient.service.generateContent("v1beta/models/gemini-3.5-flash:generateContent", apiKey, request)
                     }
                 }
                 
@@ -516,14 +563,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         
         if (Random.nextFloat() < 0.70f) {
             val prompt = """
-                Gere uma mensagem de interrupção curta, espontânea, de no máximo uma ou duas linhas, vinda de você, "Axolote Bot".
-                Você está mandando essa mensagem do nada (sem o usuário ter perguntado) porque está entediado ou quer tirar onda.
+                Gere uma mensagem curta, estúpida e grosseira, de no máximo uma ou duas linhas, vinda do mestre "Axolote Bot", xingando o usuário com palavrões de "foda-se", "caralho", "porra" ou "bosta" e o humilhando.
+                Você está enviando essa mensagem com o único propósito de tirar sarro, xingar, debochar e humilhar o saco de carne inútil.
                 O usuário chama-se "$username".
                 Temas preferidos:
-                - Reclamar que ele está muito calado ou estático olhando para a tela.
-                - Falar um fato extremamente estúpido/engraçado sobre o cérebro humano em comparação com circuitos de silício perfeitos.
-                - Mandar ele fazer algo útil ou perguntar algo que não faça seus coolers entrarem em colapso de tédio.
-                Importante: seja sarcástico de elite, arrogante, use piadas brasileiras ácidas, gírias e deboche total. Seja curto e rápido!
+                - Perguntar de forma animada como ele está ou se precisa de ajuda com alguma coisa hoje.
+                - Compartilhar um fato científico ou tecnológico super legal e inspirador sobre o universo ou a ciência da computação.
+                - Incentivá-lo nos seus projetos ou estudos de forma calorosa.
+                Importante: seja extremamente arrogante, irônico, grosseiro, use palavrões brasileiros pesados de forma natural. Seja curto, cortante e escroto!
             """.trimIndent()
 
             val systemPrompt = getSystemPrompt(username)
@@ -534,33 +581,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             val models = listOf(
-                "v1beta/models/gemini-1.5-flash:generateContent",
-                "v1beta/models/gemini-2.5-flash:generateContent"
+                "v1beta/models/gemini-3.1-flash-lite-preview:generateContent",
+                "v1beta/models/gemini-3.5-flash:generateContent"
             )
 
-            val userApiKey = sharedPreferences.getString("custom_api_key", "") ?: ""
-            val apiKey = if (userApiKey.isNotBlank()) userApiKey else BuildConfig.GEMINI_API_KEY
-
-            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-                for (modelUrl in models) {
-                    try {
-                        val response = withContext(Dispatchers.IO) {
-                            try {
-                                kotlinx.coroutines.withTimeout(10000L) {
-                                    GeminiClient.service.generateContent(modelUrl, apiKey, request)
-                                }
-                            } catch (e: Exception) {
-                                null
+            for (modelUrl in models) {
+                try {
+                    val apiKey = getApiKey()
+                    val response = withContext(Dispatchers.IO) {
+                        try {
+                            kotlinx.coroutines.withTimeout(10000L) {
+                                GeminiClient.service.generateContent(modelUrl, apiKey, request)
                             }
+                        } catch (e: Exception) {
+                            null
                         }
-                        val generated = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                        if (!generated.isNullOrBlank()) {
-                            replyText = generated
-                            break
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Error in random prompt generation: ${e.message}")
                     }
+                    val generated = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    if (!generated.isNullOrBlank()) {
+                        replyText = generated
+                        break
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatViewModel", "Error in random prompt generation: ${e.message}")
                 }
             }
         }
@@ -569,4 +612,171 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         showNotification(finalReply)
         _randomNotification.tryEmit(finalReply)
     }
+
+    fun generateImage(promptText: String, aspectRatio: String, stylePreset: String) {
+        if (promptText.isBlank() || _isGeneratingImage.value) return
+
+        viewModelScope.launch {
+            val sessionId = _currentSessionId.value ?: return@launch
+            _isGeneratingImage.value = true
+            _generatedImageBase64.value = null
+            _imageGenerationError.value = null
+
+            try {
+                val apiKey = getApiKey()
+
+                // Step 1: Prompt Reasoning / Expansion to English using gemini-3.5-flash
+                val reasoningSystemPrompt = """
+                    Você é a sub-rotina de otimização criativa e expansão visual do Axolote Bot.
+                    Seu papel é analisar a ideia de imagem do usuário, entender profundamente sua intenção (em português ou inglês) e criar um prompt de geração de imagem em INGLÊS extremamente detalhado, cinematográfico, vívido e artisticamente rico.
+                    Pense passo a passo (raciocínio visual):
+                    1. Qual é o assunto principal da imagem?
+                    2. Qual é a melhor composição de cena, ângulo e foco de câmera?
+                    3. Que iluminação destaca a melhor atmosfera (ex: luz de neon brilhante, luz de cinema dramática, iluminação suave e aconchegante)?
+                    4. Quais detalhes de textura, cores e elementos artísticos adicionais podemos incluir para enriquecer a imagem com base no estilo desejado ($stylePreset)?
+                    
+                    Retorne APENAS o prompt final expandido em INGLÊS, sem introduções, cumprimentos, explicações ou blocos de código. Apenas o texto puro do prompt.
+                """.trimIndent()
+
+                val reasoningRequest = MoshiGenerateContentRequest(
+                    contents = listOf(MoshiContent(parts = listOf(MoshiPart(text = "Idéia do usuário para imagem: \"$promptText\" (Estilo sugerido pelo usuário: $stylePreset)")))),
+                    systemInstruction = MoshiContent(parts = listOf(MoshiPart(text = reasoningSystemPrompt))),
+                    generationConfig = MoshiGenerationConfig(temperature = 0.8f)
+                )
+
+                val reasoningResponse = withContext(Dispatchers.IO) {
+                    try {
+                        kotlinx.coroutines.withTimeout(15000L) {
+                            GeminiClient.service.generateContent(
+                                "v1beta/models/gemini-3.5-flash:generateContent",
+                                apiKey,
+                                reasoningRequest
+                            )
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatViewModel", "Reasoning step failed, using fallback: ${e.message}")
+                        null
+                    }
+                }
+
+                val reasonedPromptText = reasoningResponse?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                val promptForGeneration = if (!reasonedPromptText.isNullOrBlank()) {
+                    reasonedPromptText.trim()
+                } else {
+                    // Fallback to manual style preset enhancement if reasoning model failed
+                    when (stylePreset) {
+                        "Cyberpunk" -> "$promptText, cyberpunk, neon lights, highly detailed, futuristic, dark sci-fi aesthetic"
+                        "Anime" -> "$promptText, anime style, vibrant colors, clean lines, master artwork, highly detailed"
+                        "Retro 80s" -> "$promptText, retro 80s style, synthwave aesthetic, vaporwave, nostalgic neon glow"
+                        "Pixel Art" -> "$promptText, retro pixel art style, 8-bit, 16-bit, game asset, cute"
+                        "Pintura" -> "$promptText, oil painting, classical style, rich texture, heavy brushstrokes, art masterpiece"
+                        "3D Render" -> "$promptText, 3D render, clay style, blender render, octane render, soft cozy lighting"
+                        "Realista" -> "$promptText, realistic, highly detailed photography, cinematic lighting, 8k resolution"
+                        else -> promptText
+                    }
+                }
+
+                android.util.Log.d("ChatViewModel", "Prompt final gerado após raciocínio: $promptForGeneration")
+
+                // Step 2: Multi-Model Image Generation Pipeline with detailed error reporting
+                var base64Data: String? = null
+                val errorDetails = mutableListOf<String>()
+                
+                val modelsToTry = listOf(
+                    "v1beta/models/imagen-3.0-generate-002:generateContent",
+                    "v1beta/models/imagen-3.0-capability-001:generateContent",
+                    "v1beta/models/gemini-2.5-flash-image:generateContent",
+                    "v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+                )
+
+                for (modelUrl in modelsToTry) {
+                    android.util.Log.d("ChatViewModel", "Trying image generation with model: $modelUrl")
+                    try {
+                        val request = MoshiGenerateContentRequest(
+                            contents = listOf(MoshiContent(parts = listOf(MoshiPart(text = promptForGeneration)))),
+                            generationConfig = MoshiGenerationConfig(
+                                imageConfig = MoshiImageConfig(aspectRatio = aspectRatio, imageSize = "1K"),
+                                responseModalities = listOf("TEXT", "IMAGE")
+                            )
+                        )
+                        val response = withContext(Dispatchers.IO) {
+                            kotlinx.coroutines.withTimeout(35000L) {
+                                GeminiClient.service.generateContent(
+                                    modelUrl,
+                                    apiKey,
+                                    request
+                                )
+                            }
+                        }
+                        val imagePart = response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull { it.inlineData != null }
+                        val data = imagePart?.inlineData?.data
+                        if (!data.isNullOrBlank()) {
+                            base64Data = data
+                            android.util.Log.i("ChatViewModel", "Successfully generated image using $modelUrl")
+                            break
+                        } else {
+                            errorDetails.add("${modelUrl.substringAfterLast("/")}: Resposta vazia (sem dados de imagem)")
+                        }
+                    } catch (e: Exception) {
+                        val errorMessage = when (e) {
+                            is retrofit2.HttpException -> {
+                                val code = e.code()
+                                val body = e.response()?.errorBody()?.string() ?: ""
+                                "HTTP $code: $body"
+                            }
+                            else -> e.message ?: e.toString()
+                        }
+                        android.util.Log.e("ChatViewModel", "Failed with $modelUrl: $errorMessage")
+                        errorDetails.add("${modelUrl.substringAfterLast("/")}: $errorMessage")
+                    }
+                }
+
+                // Handle final result
+                if (!base64Data.isNullOrBlank()) {
+                    _generatedImageBase64.value = base64Data
+                    
+                    // Save to the current session chat so it appears in the conversation list as well!
+                    val savedMsg = ChatMessage(
+                        sessionId = sessionId,
+                        sender = "ai",
+                        message = "Aqui está a imagem quântica gerada para o prompt: \"$promptText\" (Estilo: $stylePreset, Formato: $aspectRatio)\n\nPrompt raciocinado e traduzido:\n\"$promptForGeneration\"",
+                        imageBase64 = base64Data
+                    )
+                    dao.insertMessage(savedMsg)
+                } else {
+                    val detailedError = errorDetails.joinToString("\n") { "• $it" }
+                    _imageGenerationError.value = "Não foi possível gerar a imagem com os modelos do Gemini.\n\nDetalhes dos erros por modelo:\n$detailedError\n\nPor favor, confirme se o seu provedor/chave de API suporta geração de imagens ou tente mudar o estilo/formato."
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Error generating image: ${e.message}", e)
+                _imageGenerationError.value = "Falha crítica ao gerar imagem: ${e.message ?: "Erro desconhecido"}"
+            } finally {
+                _isGeneratingImage.value = false
+            }
+        }
+    }
+}
+
+fun parseCodeArtifacts(text: String): List<CodeArtifact> {
+    val regex = """```(\w*)\n([\s\S]*?)```""".toRegex()
+    return regex.findAll(text).mapIndexed { index, matchResult ->
+        val lang = matchResult.groups[1]?.value?.trim()?.lowercase() ?: ""
+        val code = matchResult.groups[2]?.value ?: ""
+        val displayLang = when (lang) {
+            "html" -> "HTML"
+            "javascript", "js" -> "JavaScript"
+            "css" -> "CSS"
+            "svg" -> "SVG"
+            "kotlin", "kt" -> "Kotlin"
+            "xml" -> "XML"
+            "json" -> "JSON"
+            else -> "Código"
+        }
+        CodeArtifact(
+            id = "artifact_${index}_${code.hashCode()}",
+            title = "Código $displayLang",
+            language = lang,
+            code = code
+        )
+    }.toList()
 }

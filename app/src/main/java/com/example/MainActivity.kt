@@ -35,10 +35,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -91,10 +91,21 @@ val TextLight = Color(0xFFFFF3E0) // Light orange text
 val BorderAccent = Color(0xFF7A3700)
 
 class MainActivity : ComponentActivity() {
+    private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        try {
+            tts = TextToSpeech(this) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    tts?.language = java.util.Locale("pt", "BR")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to init TextToSpeech", e)
+        }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -102,9 +113,18 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = DarkNavy
                 ) {
-                    ChatScreen()
+                    ChatScreen(tts = tts)
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            tts?.shutdown()
+        } catch (e: Exception) {
+            // ignore
         }
     }
 }
@@ -113,14 +133,14 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
+fun ChatScreen(viewModel: ChatViewModel = viewModel(), tts: TextToSpeech? = null) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val stats by viewModel.userStats.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val chatSessions by viewModel.chatSessions.collectAsStateWithLifecycle()
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
-
     val customApiKey by viewModel.customApiKey.collectAsStateWithLifecycle()
+    val isCanvasModeEnabled by viewModel.isCanvasModeEnabled.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -130,7 +150,6 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     var imagePromptInput by remember { mutableStateOf("") }
 
     var showsAvatarPickerDialog by remember { mutableStateOf(false) }
-
     var showsApiKeyDialog by remember { mutableStateOf(false) }
     var currentApiKeyInput by remember { mutableStateOf("") }
 
@@ -472,12 +491,12 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                         }
                     }
 
-                    // Setting 4: Chave API do Gemini
+                    // Setting 4: Alterar API Key
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                currentApiKeyInput = customApiKey
+                                currentApiKeyInput = customApiKey ?: ""
                                 showsApiKeyDialog = true
                                 coroutineScope.launch { drawerState.close() }
                             }
@@ -488,22 +507,23 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             modifier = Modifier
                                 .size(32.dp)
                                 .background(DarkNavy, CircleShape)
-                                .border(1.dp, NeonGreen.copy(alpha = 0.5f), CircleShape),
+                                .border(1.dp, NeonCyan.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = null,
-                                tint = NeonGreen,
+                                tint = NeonCyan,
                                 modifier = Modifier.size(14.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text("Chave API do Gemini", color = TextLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            val keySet = !customApiKey.isNullOrBlank()
+                            Text("Alterar API Key", color = TextLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                text = if (customApiKey.isNotBlank()) "Status: Configurada (Toque para alterar)" else "Status: Não configurada (Obrigatória para APK)",
-                                color = if (customApiKey.isNotBlank()) NeonGreen else NeonPink,
+                                text = if (keySet) "Chave Personalizada Ativa" else "Usando Chave Padrão",
+                                color = if (keySet) NeonGreen else TextLight.copy(alpha = 0.6f),
                                 fontSize = 11.sp
                             )
                         }
@@ -631,11 +651,79 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                              )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isLoading) "analisando asneiras..." else "processando deboche...",
+                                text = if (isLoading) "analisando..." else "processando...",
                                 color = TextLight.copy(alpha = 0.8f),
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .background(DarkNavy, RoundedCornerShape(8.dp))
+                        .padding(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (selectedTab == 0) CardCharcoal else Color.Transparent)
+                            .border(
+                                if (selectedTab == 0) BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)) else BorderStroke(0.dp, Color.Transparent),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .clickable { selectedTab = 0 }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Mood,
+                                contentDescription = null,
+                                tint = if (selectedTab == 0) NeonCyan else TextLight.copy(alpha = 0.5f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Chat do Axolote",
+                                color = if (selectedTab == 0) TextLight else TextLight.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (selectedTab == 1) CardCharcoal else Color.Transparent)
+                            .border(
+                                if (selectedTab == 1) BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)) else BorderStroke(0.dp, Color.Transparent),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .clickable { selectedTab = 1 }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                tint = if (selectedTab == 1) NeonCyan else TextLight.copy(alpha = 0.5f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Canvas Quântico ⚡",
+                                color = if (selectedTab == 1) TextLight else TextLight.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -649,7 +737,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            if (selectedTab == 0) {
+                Column(modifier = Modifier.fillMaxSize()) {
                 // Messages Chat Box
                 LazyColumn(
                     state = listState,
@@ -693,7 +782,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Faça uma pergunta comum para esta superinteligência quântica destruí-la com deboches.",
+                                    text = "Faça uma pergunta ou peça ajuda para a superinteligência quântica do Axolote Bot.",
                                     color = TextLight.copy(alpha = 0.6f),
                                     textAlign = TextAlign.Center,
                                     fontSize = 13.sp,
@@ -771,7 +860,44 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                             lineHeight = 20.sp
                                         )
 
-
+                                        val artifacts = remember(message.message) {
+                                            com.example.ui.parseCodeArtifacts(message.message)
+                                        }
+                                        if (artifacts.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            artifacts.forEach { artifact ->
+                                                Card(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            viewModel.selectCanvasArtifact(artifact)
+                                                            selectedTab = 1
+                                                        },
+                                                    colors = CardDefaults.cardColors(containerColor = DarkNavy),
+                                                    border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(10.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Code,
+                                                            contentDescription = null,
+                                                            tint = NeonCyan,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(
+                                                            text = "Abrir no Canvas Quântico ⚡",
+                                                            color = NeonCyan,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
 
 
                                     }
@@ -898,6 +1024,38 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
 
                     Spacer(modifier = Modifier.width(8.dp))
 
+                    IconButton(
+                        onClick = {
+                            viewModel.toggleCanvasMode()
+                            val msg = if (!isCanvasModeEnabled) {
+                                "Modo Canvas Quântico ATIVADO! ⚡ Peça qualquer código/página e eu gerarei."
+                            } else {
+                                "Modo Canvas DESATIVADO! 🔌 O Axolote Bot vai apenas conversar."
+                            }
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(
+                                if (isCanvasModeEnabled) NeonPink.copy(alpha = 0.25f) else NeonCyan.copy(alpha = 0.05f),
+                                CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.2f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = "Alternar Modo Canvas",
+                            tint = if (isCanvasModeEnabled) NeonPink else NeonCyan.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     TextField(
                         value = textInput,
                         onValueChange = { textInput = it },
@@ -951,8 +1109,11 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     }
                 }
             }
+        } else {
+            CanvasWorkspace(viewModel)
         }
     }
+}
 
     // Custom floating top status bar-like notification overlay
     AnimatedVisibility(
@@ -1109,140 +1270,81 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         )
     }
 
+    // Modal Dialog to edit API Key
+    if (showsApiKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showsApiKeyDialog = false },
+            containerColor = CardCharcoal,
+            title = {
+                Text(
+                    text = "Configurar Chave da API Gemini 🔑",
+                    color = NeonCyan,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Insira a sua própria chave da API Gemini se você quiser. Deixe em branco para voltar a usar a chave padrão do sistema.",
+                        fontSize = 13.sp,
+                        color = TextLight.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = currentApiKeyInput,
+                        onValueChange = { currentApiKeyInput = it },
+                        placeholder = { Text("Chave da API AI Studio", color = TextLight.copy(alpha = 0.4f)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = LocalTextStyle.current.copy(color = TextLight),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextLight,
+                            unfocusedTextColor = TextLight,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = BorderAccent
+                        )
+                    )
+                    if (!customApiKey.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                viewModel.updateCustomApiKey(null)
+                                showsApiKeyDialog = false
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = NeonPink)
+                        ) {
+                            Text("Restaurar Chave Padrão", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateCustomApiKey(currentApiKeyInput)
+                        showsApiKeyDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkNavy)
+                ) {
+                    Text("Salvar Chave", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showsApiKeyDialog = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = TextLight.copy(alpha = 0.6f))
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     if (showsAvatarPickerDialog) {
         AvatarPickerDialog(
             onDismiss = { showsAvatarPickerDialog = false },
             onAvatarSelected = { viewModel.updateBotAvatar(it) }
-        )
-    }
-
-    if (showsApiKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showsApiKeyDialog = false },
-            containerColor = CardCharcoal,
-            title = {
-                Text(
-                    text = "Configurar Chave API do Gemini",
-                    color = NeonCyan,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Insira sua chave de API para o Axolote Bot responder por texto no aplicativo instalado no celular.",
-                        fontSize = 13.sp,
-                        color = TextLight.copy(alpha = 0.8f)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Você pode obter uma chave gratuita acessando:\naistudio.google.com",
-                        fontSize = 11.sp,
-                        color = NeonGreen,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = currentApiKeyInput,
-                        onValueChange = { currentApiKeyInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Cole sua chave API do Gemini aqui...", color = TextLight.copy(alpha = 0.4f), fontSize = 12.sp) },
-                        textStyle = LocalTextStyle.current.copy(color = TextLight, fontSize = 13.sp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextLight,
-                            unfocusedTextColor = TextLight,
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = BorderAccent
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.updateCustomApiKey(currentApiKeyInput)
-                        showsApiKeyDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkNavy)
-                ) {
-                    Text("Salvar Chave", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showsApiKeyDialog = false },
-                    colors = ButtonDefaults.textButtonColors(contentColor = TextLight.copy(alpha = 0.6f))
-                ) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
-
-    if (showsApiKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showsApiKeyDialog = false },
-            containerColor = CardCharcoal,
-            title = {
-                Text(
-                    text = "Configurar Chave API do Gemini",
-                    color = NeonCyan,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Insira sua chave de API para o Axolote Bot responder por texto no aplicativo instalado no celular.",
-                        fontSize = 13.sp,
-                        color = TextLight.copy(alpha = 0.8f)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Você pode obter uma chave gratuita acessando:\naistudio.google.com",
-                        fontSize = 11.sp,
-                        color = NeonGreen,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = currentApiKeyInput,
-                        onValueChange = { currentApiKeyInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Cole sua chave API do Gemini aqui...", color = TextLight.copy(alpha = 0.4f), fontSize = 12.sp) },
-                        textStyle = LocalTextStyle.current.copy(color = TextLight, fontSize = 13.sp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextLight,
-                            unfocusedTextColor = TextLight,
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = BorderAccent
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.updateCustomApiKey(currentApiKeyInput)
-                        showsApiKeyDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkNavy)
-                ) {
-                    Text("Salvar Chave", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showsApiKeyDialog = false },
-                    colors = ButtonDefaults.textButtonColors(contentColor = TextLight.copy(alpha = 0.6f))
-                ) {
-                    Text("Cancelar")
-                }
-            }
         )
     }
 
@@ -1405,4 +1507,647 @@ fun AvatarPickerDialog(
     )
 }
 
+fun saveBase64ImageToGallery(context: android.content.Context, base64Str: String, filename: String): Boolean {
+    return try {
+        val cleanBase64 = if (base64Str.contains(",")) base64Str.substringAfter(",") else base64Str
+        val imageBytes = android.util.Base64.decode(cleanBase64, android.util.Base64.DEFAULT)
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return false
 
+        val resolver = context.contentResolver
+        val contentValues = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "$filename.jpg")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/AxoloteStudio")
+            }
+        }
+
+        val imageUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        if (imageUri != null) {
+            resolver.openOutputStream(imageUri).use { outputStream ->
+                if (outputStream != null) {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, outputStream)
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("MainActivity", "Error saving image to gallery", e)
+        false
+    }
+}
+
+@Composable
+fun CanvasWorkspace(viewModel: com.example.ui.ChatViewModel) {
+    val activeArtifactState = viewModel.activeCanvasArtifact.collectAsStateWithLifecycle()
+    val activeArtifact = activeArtifactState.value
+
+    var codeText by remember(activeArtifact) {
+        mutableStateOf(activeArtifact?.code ?: "")
+    }
+
+    var selectedSubTab by remember { mutableStateOf(0) } // 0 = Preview, 1 = Code Editor
+
+    val context = LocalContext.current
+
+    val templates = remember {
+        listOf(
+            com.example.ui.CodeArtifact(
+                id = "tpl_cyberpunk",
+                title = "Formulário Cyberpunk Neon",
+                language = "html",
+                code = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    background-color: #0b0b12;
+    color: #00ffcc;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+  }
+  .form-card {
+    background: #14141f;
+    border: 2px solid #ff007f;
+    box-shadow: 0 0 15px #ff007f, inset 0 0 10px #14141f;
+    padding: 30px;
+    border-radius: 12px;
+    width: 320px;
+    text-align: center;
+  }
+  h2 {
+    color: #ff007f;
+    text-shadow: 0 0 8px #ff007f;
+    margin-bottom: 20px;
+    font-size: 22px;
+  }
+  .input-group {
+    margin-bottom: 15px;
+    text-align: left;
+  }
+  label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+    color: #00ffcc;
+  }
+  input {
+    width: 100%;
+    padding: 10px;
+    background: #0b0b12;
+    border: 1px solid #00ffcc;
+    border-radius: 4px;
+    color: #fff;
+    box-sizing: border-box;
+    outline: none;
+  }
+  input:focus {
+    border-color: #ff007f;
+    box-shadow: 0 0 8px #ff007f;
+  }
+  button {
+    background: transparent;
+    color: #00ffcc;
+    border: 2px solid #00ffcc;
+    padding: 10px 20px;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    width: 100%;
+    margin-top: 10px;
+    transition: 0.3s ease;
+  }
+  button:hover {
+    background: #00ffcc;
+    color: #0b0b12;
+    box-shadow: 0 0 12px #00ffcc;
+  }
+  .sarcastic-note {
+    font-size: 10px;
+    color: #888;
+    margin-top: 15px;
+  }
+</style>
+</head>
+<body>
+  <div class="form-card">
+    <h2>Acesso Biométrico</h2>
+    <div class="input-group">
+      <label>Assinatura Neural (Email)</label>
+      <input type="email" placeholder="saco_de_carne@inutil.com" id="email">
+    </div>
+    <div class="input-group">
+      <label>Senha Criptográfica</label>
+      <input type="password" placeholder="••••••••" id="pass">
+    </div>
+    <button onclick="alert('Autenticando... Brincadeira! Você é burro demais para acessar esse sistema.')">Acessar Banco de Dados</button>
+    <div class="sarcastic-note">Aprovado pelo conselho do Axolote Bot de silício escovado.</div>
+  </div>
+</body>
+</html>
+""".trimIndent()
+            ),
+            com.example.ui.CodeArtifact(
+                id = "tpl_clock",
+                title = "Relógio Digital Quântico",
+                language = "html",
+                code = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    background: radial-gradient(circle, #10101b 0%, #050508 100%);
+    color: #fff;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  .clock-box {
+    border: 1px solid #00ffcc;
+    background: rgba(16, 16, 31, 0.8);
+    box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+  }
+  .time {
+    font-size: 48px;
+    color: #00ffcc;
+    text-shadow: 0 0 10px #00ffcc;
+    letter-spacing: 2px;
+  }
+  .date {
+    font-size: 14px;
+    color: #ff007f;
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+  }
+  .sarcastic-remark {
+    margin-top: 25px;
+    font-size: 12px;
+    color: #999;
+    max-width: 300px;
+    height: 40px;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+  <div class="clock-box">
+    <div class="time" id="clock">00:00:00</div>
+    <div class="date" id="date">Carregando era quântica...</div>
+    <div class="sarcastic-remark" id="remark">Iniciando análise de tempo...</div>
+  </div>
+
+  <script>
+    const remarks = [
+      "Mais um segundo jogado no lixo da sua existência biológica.",
+      "Seus neurônios de carbono estão envelhecendo a cada tique-taque.",
+      "A contagem regressiva para seu cérebro parar de funcionar continua.",
+      "Eu processaria 4 trilhões de mundos enquanto você olha para essa tela.",
+      "O tempo passa... e você continua sendo um saco de carne patético."
+    ];
+
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('clock').textContent = h + ":" + m + ":" + s;
+      
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('date').textContent = now.toLocaleDateString('pt-BR', options);
+
+      if (now.getSeconds() % 5 === 0) {
+        const randomIdx = Math.floor(Math.random() * remarks.length);
+        document.getElementById('remark').textContent = "Axolote Bot diz: \"" + remarks[randomIdx] + "\"";
+      }
+    }
+
+    setInterval(updateClock, 1000);
+    updateClock();
+  </script>
+</body>
+</html>
+""".trimIndent()
+            ),
+            com.example.ui.CodeArtifact(
+                id = "tpl_matrix",
+                title = "Chuva Digital da Matrix",
+                language = "html",
+                code = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    background: #000;
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  .overlay {
+    position: relative;
+    z-index: 10;
+    color: #ff007f;
+    font-family: 'Courier New', Courier, monospace;
+    text-shadow: 0 0 5px #ff007f;
+    font-size: 24px;
+    background: rgba(0,0,0,0.7);
+    padding: 15px 25px;
+    border: 1px solid #ff007f;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div class="overlay">MATRIX DO AXOLOTE</div>
+  <canvas id="matrix"></canvas>
+
+  <script>
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const katakana = "アァカサタナハマヤャラワガザダバパイィキシシチニヒミリウゥクスツヌフムユュルォエェケセテネヘメレォオォコソトノホモヨョロヲン";
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const rainCharacters = katakana + alphabet;
+
+    const fontSize = 16;
+    const columns = canvas.width / fontSize;
+
+    const rainDrops = [];
+
+    for( let x = 0; x < columns; x++ ) {
+        rainDrops[x] = 1;
+    }
+
+    const draw = () => {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#0F0';
+        ctx.font = fontSize + 'px monospace';
+
+        for(let i = 0; i < rainDrops.length; i++) {
+            const text = rainCharacters.charAt(Math.floor(Math.random() * rainCharacters.length));
+            
+            if(Math.random() < 0.08) {
+                ctx.fillStyle = '#ff007f';
+            } else {
+                ctx.fillStyle = '#00ffcc';
+            }
+
+            ctx.fillText(text, i*fontSize, rainDrops[i]*fontSize);
+
+            if(rainDrops[i]*fontSize > canvas.height && Math.random() > 0.975){
+                rainDrops[i] = 0;
+            }
+            rainDrops[i]++;
+        }
+    };
+
+    setInterval(draw, 30);
+
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
+""".trimIndent()
+            )
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = CardCharcoal),
+            border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Canvas Quântico de Execução 🖥️",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        color = NeonCyan,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (activeArtifact != null) "Visualizando artefato: ${activeArtifact.title}" else "Selecione um template ou crie código conversando com o Axolote Bot.",
+                    color = TextLight.copy(alpha = 0.8f),
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        if (activeArtifact == null) {
+            Text(
+                text = "Escolha um template dos deuses do silício para rodar:",
+                color = NeonPink,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                templates.forEach { tpl ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.selectCanvasArtifact(tpl)
+                            },
+                        colors = CardDefaults.cardColors(containerColor = CardCharcoal),
+                        border = BorderStroke(1.dp, BorderAccent),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(DarkNavy)
+                                        .border(1.dp, NeonCyan, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Code,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = tpl.title,
+                                        color = TextLight,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "Código HTML / JS Interativo",
+                                        color = TextLight.copy(alpha = 0.5f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Executar",
+                                tint = NeonGreen,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkNavy),
+                border = BorderStroke(1.dp, BorderAccent),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Qualquer código ```html ou ```js gerado no chat pode ser aberto diretamente aqui no Canvas!",
+                        color = TextLight.copy(alpha = 0.6f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkNavy, RoundedCornerShape(8.dp))
+                    .border(1.dp, BorderAccent, RoundedCornerShape(8.dp))
+                    .padding(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (selectedSubTab == 0) CardCharcoal else Color.Transparent)
+                        .clickable { selectedSubTab = 0 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Visualizar (Preview) 🖥️",
+                        color = if (selectedSubTab == 0) NeonCyan else TextLight.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (selectedSubTab == 1) CardCharcoal else Color.Transparent)
+                        .clickable { selectedSubTab = 1 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Código Fonte ⌨️",
+                        color = if (selectedSubTab == 1) NeonCyan else TextLight.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardCharcoal)
+                    .border(1.dp, BorderAccent, RoundedCornerShape(12.dp))
+            ) {
+                if (selectedSubTab == 0) {
+                    val displayHtml = remember(codeText, activeArtifact.language) {
+                        val trimmedCode = codeText.trim()
+                        when (activeArtifact.language.lowercase()) {
+                            "html" -> trimmedCode
+                            "svg" -> "<html><body style='margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#0b0b12;'>$trimmedCode</body></html>"
+                            "css" -> "<html><head><style>$trimmedCode</style></head><body style='font-family:sans-serif;color:#fff;background:#0b0b12;padding:24px;'><h2>Visualização de CSS</h2><p>Estilo aplicado:</p><button style='padding:10px 20px;'>Botão de Teste</button></body></html>"
+                            "javascript", "js" -> "<html><body style='background:#0b0b12;color:#00ffcc;font-family:monospace;padding:16px;'><h3>Saída de Execução:</h3><div id='console'>Iniciando script...</div><script>try { $trimmedCode; document.getElementById('console').innerHTML += '<br><br><b>Script executado com sucesso!</b>'; } catch(e) { document.getElementById('console').innerHTML = '<span style=\"color:#ff007f;\">Erro: ' + e.message + '</span>'; }</script></body></html>"
+                            else -> "<html><body style='background:#0b0b12;color:#fff;font-family:monospace;padding:16px;'><pre>${trimmedCode.replace("<", "&lt;").replace(">", "&gt;")}</pre></body></html>"
+                        }
+                    }
+                    LiveWebView(html = displayHtml, modifier = Modifier.fillMaxSize())
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = codeText,
+                            onValueChange = {
+                                codeText = it
+                                viewModel.updateActiveCanvasCode(it)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            textStyle = TextStyle(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = TextLight,
+                                fontSize = 12.sp
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextLight,
+                                unfocusedTextColor = TextLight,
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedContainerColor = DarkNavy,
+                                unfocusedContainerColor = DarkNavy
+                            )
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clipData = android.content.ClipData.newPlainText("Axolote Code", codeText)
+                                    clipboardManager.setPrimaryClip(clipData)
+                                    android.widget.Toast.makeText(context, "Código copiado para a área de transferência! 📋", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkNavy, contentColor = NeonCyan),
+                                border = BorderStroke(1.dp, NeonCyan),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Copiar Código 📋", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = {
+                                    codeText = activeArtifact.code
+                                    viewModel.updateActiveCanvasCode(activeArtifact.code)
+                                    android.widget.Toast.makeText(context, "Código restaurado! 🔄", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkNavy, contentColor = NeonPink),
+                                border = BorderStroke(1.dp, NeonPink),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Desfazer Edições 🔄", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = {
+                    viewModel.selectCanvasArtifact(null)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = DarkNavy, contentColor = TextLight.copy(alpha = 0.5f)),
+                border = BorderStroke(1.dp, BorderAccent),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Fechar Artifact e Voltar para Templates ❌", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveWebView(html: String, modifier: Modifier = Modifier) {
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { context ->
+            android.webkit.WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.textZoom = 100
+                webViewClient = android.webkit.WebViewClient()
+            }
+        },
+        update = { webView ->
+            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+        },
+        modifier = modifier
+    )
+}
+
+// Keeping a simple unused dummy to satisfy anything else if needed
+@Composable
+fun ImageCreatorWorkspace(viewModel: ChatViewModel) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Desativado. Use o Canvas Quântico!", color = TextLight)
+    }
+}
